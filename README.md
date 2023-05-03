@@ -1,1 +1,1 @@
-# duolingo_cards_bot
+# language_cards_bot
