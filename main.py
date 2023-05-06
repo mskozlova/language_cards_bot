@@ -19,21 +19,15 @@ logging.basicConfig(
     format="%(asctime)s | %(name)s | %(levelname)s | %(message)s",
 )
 
-users = dict()
 
 # YDB initializing
-if os.getenv("YDB_ACCESS_TOKEN_CREDENTIALS") is not None:  # for local testing
-    ydb_driver_params = dict(
-        endpoint=os.getenv("YDB_ENDPOINT"),
-        database=os.getenv("YDB_DATABASE"),
-        credentials=ydb.AccessTokenCredentials(
-            os.getenv("YDB_ACCESS_TOKEN_CREDENTIALS")
-        ),
-    )
-else:
-    ydb_driver_params = dict(endpoint=os.getenv("YDB_ENDPOINT"), database=os.getenv("YDB_DATABASE"))
+ydb_driver_config = ydb.DriverConfig(
+    os.getenv("YDB_ENDPOINT"), os.getenv("YDB_DATABASE"),
+    credentials=ydb.credentials_from_env_variables(),
+    root_certificates=ydb.load_ydb_root_certificate(),
+)
 
-ydb_driver = ydb.Driver(**ydb_driver_params)
+ydb_driver = ydb.Driver(ydb_driver_config)
 ydb_driver.wait(fail_fast=True, timeout=30)
 pool = ydb.SessionPool(ydb_driver)
 
@@ -99,47 +93,81 @@ def handle_add_words(message):
     try:
         reply_message = bot.reply_to(
             message,
-            "Write words and translations split by ' - '. Each word on new line.\n"
-            "Several translations can be split by '/'.\n"
-            "For example:\n\n"
-            "hello - привет\n"
-            "onomatopoeia - звукоподражание\n"
-            "key - ключ/тональность"
+            "First, write new words you want to learn, each on new row.\n"
+            "For example:\n"
+            "hola\n"
+            "gracias\n"
+            "adiós\n\n"
+            "After that I will ask you to provide translations."
         )
-        bot.register_next_step_handler(reply_message, process_adding_words)
+        bot.register_next_step_handler(reply_message, process_adding_words, language=language)
     except Exception as Argument:
         logging.exception("adding words failed")
 
 
-def format_word_pairs(word_pairs):
-    formatted_word_pairs = []
-    for wp in word_pairs:
-        assert len(wp.split(" - ")) == 2, "wrong format"
-        word, translation = wp.split(" - ")
-        formatted_word_pairs.append((word, json.dumps(translation.split("/"))))
-    return formatted_word_pairs
+# def format_word_pairs(word_pairs):
+#     formatted_word_pairs = []
+#     for wp in word_pairs:
+#         assert len(wp.split(" - ")) == 2, "wrong format"
+#         word, translation = wp.split(" - ")
+#         formatted_word_pairs.append((word, json.dumps(translation.split("/"))))
+#     return formatted_word_pairs
 
 
-def process_adding_words(message):
+def process_adding_words(message, language):
     try:
-        language = get_current_language(pool, message.chat.id)
-        word_pairs = format_word_pairs(message.text.split("\n"))
-        update_vocab(pool, message.chat.id, language, word_pairs)
-        n_words = 0
+        # language = get_current_language(pool, message.chat.id)
+        
+        words = list(filter(
+            lambda x: len(x) > 0,
+            [w.strip().lower() for w in message.text.split("\n")]
+        ))
+        # update_vocab(pool, message.chat.id, language, word_pairs)
+        # n_words = 0
+        if len(words) == 0:
+            bot.reply_to(
+                message,
+                "You didn't add anything. Try again /add_words?"
+            )
+            return
         bot.reply_to(
             message,
-            "Language {}. Updated {} words. You now have {} words.\n".format(
-                language,
-                len(word_pairs),
-                int(n_words)
-            ) + "Add more /add_words or start training /train."
+            "You've added {} words, now let's translate them one by one. ".format(len(words)) +
+            "Type /stop anytime to exit the translation.\n"
+            "You can add multiple translations divided by '/', for example:\n"
+            "> adiós\n"
+            "farewell / goodbye"
         )
+        translation_message = bot.send_message(
+            message.chat.id,
+            "Translate {}".format(words[0])
+        )
+        bot.register_next_step_handler(translation_message, process_word_translation,
+                                       language=language, words=words, translations=[])
     except Exception as Argument:
         logging.exception("processing words addition failed")
         bot.reply_to(
             message,
-            "Format checking failed. Try again: /add_words"
+            "Word adding failed. Try again: /add_words"
         )
+        
+
+def process_word_translation(message, language, words, translations):
+    if message != "/stop":
+        translations.append(json.dumps([m.strip().lower() for m in message.split("/")]))    
+    
+    if len(translations) == len(words) or message == "/stop": # translation is over
+        update_vocab(pool, message.chat.id, language, list(zip(words, translations)))
+        bot.send_message(
+            message.chat.id, "Finished! Saved {} words".format(len(translations))
+        )
+    else:
+        translation_message = bot.send_message(
+            message.chat.id, words[len(translations)]
+        )
+        bot.register_next_step_handler(translation_message, process_word_translation,
+                                       language=language, words=words, translations=translations)
+    
 
 
 @bot.message_handler(commands=["show_languages"])
