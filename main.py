@@ -13,11 +13,7 @@ from word import compare_user_input_with_db, get_translation, get_word
 bot = telebot.TeleBot(os.environ.get("BOT_TOKEN"))
 empty_markup = types.ReplyKeyboardRemove()
 
-logging.basicConfig(
-    filename="info.log",
-    level=logging.INFO,
-    format="%(asctime)s | %(name)s | %(levelname)s | %(message)s",
-)
+logging.getLogger().setLevel(logging.DEBUG)
 
 
 # YDB initializing
@@ -91,6 +87,7 @@ def handle_add_words(message):
         handle_language_not_set(message)
         return
     try:
+        logging.info("Starting adding words!")
         reply_message = bot.reply_to(
             message,
             "First, write new words you want to learn, each on new row.\n"
@@ -105,25 +102,15 @@ def handle_add_words(message):
         logging.exception("adding words failed")
 
 
-# def format_word_pairs(word_pairs):
-#     formatted_word_pairs = []
-#     for wp in word_pairs:
-#         assert len(wp.split(" - ")) == 2, "wrong format"
-#         word, translation = wp.split(" - ")
-#         formatted_word_pairs.append((word, json.dumps(translation.split("/"))))
-#     return formatted_word_pairs
-
-
 def process_adding_words(message, language):
     try:
         # language = get_current_language(pool, message.chat.id)
+        logging.info("Started translating process, language {}".format(language))
         
         words = list(filter(
             lambda x: len(x) > 0,
             [w.strip().lower() for w in message.text.split("\n")]
         ))
-        # update_vocab(pool, message.chat.id, language, word_pairs)
-        # n_words = 0
         if len(words) == 0:
             bot.reply_to(
                 message,
@@ -153,20 +140,30 @@ def process_adding_words(message, language):
         
 
 def process_word_translation(message, language, words, translations):
-    if message != "/stop":
-        translations.append(json.dumps([m.strip().lower() for m in message.split("/")]))    
-    
-    if len(translations) == len(words) or message == "/stop": # translation is over
-        update_vocab(pool, message.chat.id, language, list(zip(words, translations)))
-        bot.send_message(
-            message.chat.id, "Finished! Saved {} words".format(len(translations))
-        )
-    else:
-        translation_message = bot.send_message(
-            message.chat.id, words[len(translations)]
-        )
-        bot.register_next_step_handler(translation_message, process_word_translation,
-                                       language=language, words=words, translations=translations)
+    try:
+        logging.info("Translating word {}".format(words[len(translations)]))
+        if message.text != "/stop":
+            logging.debug("Adding translation: {}".format(message.text))
+            translations.append(json.dumps([m.strip().lower() for m in message.text.split("/")]))    
+        
+        if len(translations) == len(words) or message.text == "/stop": # translation is over
+            logging.debug("Translation is over, len words {}, len translations {}, message {}".format(
+                len(words), len(translations),
+                message.text
+            ))
+            update_vocab(pool, message.chat.id, language, list(zip(words, translations)))
+            bot.send_message(
+                message.chat.id, "Finished! Saved {} words".format(len(translations))
+            )
+        else:
+            logging.debug("Continue translating")
+            translation_message = bot.send_message(
+                message.chat.id, words[len(translations)]
+            )
+            bot.register_next_step_handler(translation_message, process_word_translation,
+                                           language=language, words=words, translations=translations)
+    except Exception as e:
+        logging.error("Word translating failed: {}".format(e))
     
 
 
