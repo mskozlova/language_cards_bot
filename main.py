@@ -41,6 +41,7 @@ def handle_help(message):
                      "(you can add multiple and switch between them without erasing the progress).\n"
                      "- /show_languages to see the list of your languages.\n"
                      "- /add_words to add words to current vocabulary.\n"
+                     "- /show_words to print out all words you saved for current language.\n"
                      #"- /delete_words to delete some words from current vocabulary.\n"
                      "- /train to choose training strategy and start training.\n"
                      "- /stop to stop training session without saving the results.\n")
@@ -164,6 +165,31 @@ def process_word_translation(message, language, words, translations):
                                            language=language, words=words, translations=translations)
     except Exception as e:
         logging.error("Word translating failed: {}".format(e))
+        
+
+@bot.message_handler(commands=["show_words"])
+def handle_add_words(message):
+    language = get_current_language(pool, message.chat.id)
+    if language is None:
+        handle_language_not_set(message)
+        return
+    try:
+        logging.debug("Showing all words, chat {}".format(message.chat.id))
+        vocab = get_full_vocab(pool, message.chat.id, language)
+        vocab = sorted(vocab, key=lambda entry: entry["word"])
+        words = [
+            "{} - {}".format(
+                entry["word"],
+                " / ".join(json.loads(entry["translation"]))
+            ) for entry in vocab
+        ]
+        bot.reply_to(
+            message,
+            "Your words for {} language:\n\n".format(language) +
+            "\n".join(words)
+        )
+    except Exception as e:
+        logging.error("Word showing failed: {}".format(e))
     
 
 
@@ -214,32 +240,34 @@ def handle_show_current_languages(message):
 #         logging.info("successfully deleted language: {}".format(language))
 #     else:
 #         bot.reply_to(message, "You don't have language {}.".format(language))
-#
-#
-# @bot.message_handler(commands=["delete_words"])
-# def handle_delete_words(message):
-#     user = get_user(message.chat.id)
-#     language = user.get_current_lang()
-#     if language is None:
-#         handle_language_not_set(message)
-#         return
-#
-#     try:
-#         reply_message = bot.reply_to(message, "Write words to delete. Each word on new line.")
-#         bot.register_next_step_handler(reply_message, process_deleting_words)
-#     except Exception as Argument:
-#         logging.exception("deleting words failed")
-#
-#
-# def process_deleting_words(message):
-#     user = get_user(message.chat.id)
-#     try:
-#         words = message.text.split("\n")
-#         user.delete_words(user.get_current_lang(), words)
-#         update_vocab(pool, user)
-#         bot.reply_to(message, "Deleted words: {}".format(words))
-#     except Exception as Argument:
-#         logging.exception("processing words addition failed")
+
+
+@bot.message_handler(commands=["delete_words"])
+def handle_delete_words(message):
+    language = get_current_language(pool, message.chat.id)
+    if language is None:
+        handle_language_not_set(message)
+        return
+    try:
+        reply_message = bot.reply_to(message, "Write words to delete. Each word on new line.")
+        bot.register_next_step_handler(reply_message, process_deleting_words, language=language)
+    except Exception as Argument:
+        logging.exception("deleting words failed")
+
+
+def process_deleting_words(message, language):
+    try:
+        words = message.text.split("\n")
+        existing_words = get_words_from_vocab(pool, message.chat.id, language, words)
+        delete_words_from_vocab(pool, message.chat.id, language, words)
+        bot.reply_to(
+            message,
+            "Deleted {} words:\n".format(len(existing_words)) +
+            "\n".join([entry["word"] for entry in existing_words]) +
+            "" if len(existing_words) == len(words) else "\n\nOther words are unknown."
+        )
+    except Exception as Argument:
+        logging.exception("processing words deleting failed")
 
 
 @bot.message_handler(commands=["train"])
