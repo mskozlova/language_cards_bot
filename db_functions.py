@@ -134,6 +134,29 @@ def get_user_vocabs(pool, chat_id):
     return pool.retry_operation_sync(callee)
 
 
+def get_full_vocab(pool, chat_id, language):
+    def callee(session):
+        result_sets = session.transaction(ydb.SerializableReadWrite()).execute(
+            """
+            SELECT
+                word,
+                score_from,
+                score_to,
+                translation,
+            FROM `{}`
+            WHERE
+                chat_id == {}
+                AND language == '{}'
+            """.format(
+                VOCABS_TABLE_PATH, chat_id, language
+            ),
+            commit_tx=True,
+        )
+        return result_sets[0].rows
+
+    return pool.retry_operation_sync(callee)
+
+
 def delete_language_from_vocab(pool, user):
     def callee(session):
         session.transaction().execute(
@@ -142,6 +165,45 @@ def delete_language_from_vocab(pool, user):
             WHERE chat_id == {} AND language == '{}'
             """.format(
                 VOCABS_TABLE_PATH, user.chat_id, user.current_lang
+            ),
+            commit_tx=True,
+        )
+
+    return pool.retry_operation_sync(callee)
+
+
+def get_words_from_vocab(pool, chat_id, language, words):
+    def callee(session):
+        result_sets = session.transaction().execute(
+            """    
+            SELECT word FROM `{}`
+            WHERE
+                chat_id == {}
+                AND language == '{}'
+                AND word IN ({})
+            """.format(
+                VOCABS_TABLE_PATH, chat_id, language,
+                ",".join("'{}'".format(word) for word in words)
+            ),
+            commit_tx=True,
+        )
+        return result_sets[0].rows
+
+    return pool.retry_operation_sync(callee)
+
+
+def delete_words_from_vocab(pool, chat_id, language, words):
+    def callee(session):
+        session.transaction().execute(
+            """    
+            DELETE FROM `{}`
+            WHERE
+                chat_id == {}
+                AND language == '{}'
+                AND word IN ({})
+            """.format(
+                VOCABS_TABLE_PATH, chat_id, language,
+                ",".join("'{}'".format(word) for word in words)
             ),
             commit_tx=True,
         )
