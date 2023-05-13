@@ -1,3 +1,4 @@
+from hashlib import blake2b
 import logging
 import os
 import random
@@ -42,7 +43,8 @@ def handle_help(message):
                      "- /show_languages to see the list of your languages.\n"
                      "- /add_words to add words to current vocabulary.\n"
                      "- /show_words to print out all words you saved for current language.\n"
-                     #"- /delete_words to delete some words from current vocabulary.\n"
+                     "- /delete_words to delete some words from current vocabulary.\n"
+                     "- /create_group to create new group for words.\n"
                      "- /train to choose training strategy and start training.\n"
                      "- /stop to stop training session without saving the results.\n")
                      #"- /forget_me to delete all the information I have about you.\n")
@@ -168,7 +170,7 @@ def process_word_translation(message, language, words, translations):
         
 
 @bot.message_handler(commands=["show_words"])
-def handle_add_words(message):
+def handle_show_words(message):
     language = get_current_language(pool, message.chat.id)
     if language is None:
         handle_language_not_set(message)
@@ -268,6 +270,257 @@ def process_deleting_words(message, language):
         )
     except Exception as Argument:
         logging.exception("processing words deleting failed")
+
+
+@bot.message_handler(commands=["create_group"])
+def handle_create_group(message):
+    current_language = get_current_language(pool, message.chat.id)
+    if current_language is None:
+        handle_language_not_set(message)
+        return
+    try:
+        reply_message = bot.reply_to(
+            message,
+            "Write new group name. It should consits only of latin letters, digits and underscores.\n"
+            "For example, 'nouns_type_3'"
+        )
+        bot.register_next_step_handler(reply_message, process_group_creation, language=current_language)
+    except Exception as e:
+        logging.exception("starting creating group failed", exc_info=e)
+        
+
+def process_group_creation(message, language):
+    # TODO: check latin letters and underscores
+    # TODO: check name collisions with shared groups
+    try:
+        group_name = message.text.strip()
+        if len(get_group_by_name(pool, message.chat.id, language, group_name)) > 0:
+            bot.reply_to(
+                message,
+                "You already have a group with that name, please try another: /create_group"
+            )
+            return
+        
+        group_id = blake2b(digest_size=10)
+        group_key = "{}-{}-{}".format(message.chat.id, language, group_name)
+        group_id.update(group_key.encode())
+        
+        add_group(pool, message.chat.id, language=language,
+                group_name=group_name, group_id=group_id.hexdigest(), is_creator=True)
+        bot.reply_to(
+            message,
+            "Group is created! Now add some words: /group_add_words"
+        )
+    except Exception as e:
+        logging.exception("creating group failed", exc_info=e)
+
+
+def process_show_groups(message, language):
+    groups = get_all_groups(pool, message.chat.id, language)
+    
+    if len(groups) == 0:
+        bot.reply_to(message, "You don't have any groups yet, try /create_group")
+        return
+    
+    markup = types.ReplyKeyboardMarkup(row_width=3)
+    for group in groups:
+        markup.add(telebot.types.KeyboardButton(group["group_name"].decode()))
+    markup.add(telebot.types.KeyboardButton("/exit"))
+    
+    reply_message = bot.send_message(
+        message.chat.id,
+        "Your groups\n",
+        reply_markup=markup
+    )
+    return reply_message
+        
+
+@bot.message_handler(commands=["show_groups"])
+def handle_show_groups(message):
+    try:
+        current_language = get_current_language(pool, message.chat.id)
+        reply_message = process_show_groups(message, current_language)
+        bot.register_next_step_handler(reply_message, process_show_group, language=current_language)
+    except Exception as e:
+        logging.error("showing groups failed", exc_info=e)
+    
+
+def process_show_group(message, language):
+    try:
+        if message.text == "/exit":
+            bot.reply_to(message, "Exited!", reply_markup=empty_markup)
+            return
+        
+        groups = get_group_by_name(pool, message.chat.id, language, message.text)
+        
+        if len(groups) == 0:
+            bot.reply_to(message, "You don't have a group with that name, try again /show_groups",
+                         reply_markup=empty_markup)
+            return
+        
+        group_id = groups[0]["group_id"].decode("utf-8")
+        group_contents = get_group_contents(pool, group_id)
+        
+        if len(group_contents) == 0:
+            bot.reply_to(message, "This group has no words in it yet, try /group_add_words",
+                         reply_markup=empty_markup)
+            return
+        
+        words = [
+            "{} - {}".format(
+                entry["word"],
+                " / ".join(json.loads(entry["translation"]))
+            ) for entry in group_contents
+        ]
+        bot.reply_to(
+            message,
+            "Your words for {} language, group {}:\n\n".format(language, message.text) +
+            "\n".join(words),
+            reply_markup=empty_markup
+        )
+    
+    except Exception as e:
+        logging.error("showing words of group failed", exc_info=e)
+    
+
+@bot.message_handler(commands=["group_add_words"])
+def handle_group_add_words(message):
+    try:
+        current_language = get_current_language(pool, message.chat.id)
+        reply_message = process_show_groups(message, current_language)
+        bot.register_next_step_handler(reply_message, process_choose_group_to_add_words, language=current_language)
+    except Exception as e:
+        logging.error("showing groups to add words to failed", exc_info=e)
+
+
+def get_keyboard_markup(choices, additional_commands=[], row_width=2):
+    markup = types.ReplyKeyboardMarkup(row_width=row_width, resize_keyboard=True)
+    markup.add(*sorted(list(choices)), row_width=2)
+    for command in additional_commands:
+        markup.add(telebot.types.KeyboardButton(command), row_width=1)
+    return markup
+
+
+def save_words_to_group(chat_id, language, group_id, words):
+    original_words = [word.split(" - ")[0] for word in words]
+    logging.debug(",".join(original_words))
+    add_words_to_group(pool, chat_id, language, group_id, original_words)
+
+
+def process_words_batch(message, language, group_id, group_name, all_words, current_words,
+                        batch_num, batch_size, is_start=False, chosen_words=set()):
+    try:
+        logging.debug("process_words_batch: message={}, batch_num={}, chosen_words={}".format(
+            message.text,
+            batch_num,
+            ",".join(chosen_words)
+        ))
+        if is_start: # new page
+            markup = get_keyboard_markup(
+                all_words[batch_num * batch_size:(batch_num + 1) * batch_size],
+                ["/exit", "/next"]
+            )
+            current_words = set(
+                all_words[batch_num * batch_size:(batch_num + 1) * batch_size]
+            )
+            message = bot.send_message(
+                message.chat.id,
+                "Choose words for group {}, page {} out of {}".format(
+                    group_name,
+                    batch_num + 1,
+                    len(all_words) // batch_size
+                ),
+                reply_markup=markup
+            )
+            bot.register_next_step_handler(message, process_words_batch,
+                                        language=language, group_id=group_id, group_name=group_name,
+                                        all_words=all_words, current_words=current_words,
+                                        batch_num=batch_num, batch_size=batch_size, chosen_words=chosen_words)
+        elif message.text == "/exit":
+            if len(chosen_words) > 0:
+                save_words_to_group(message.chat.id, language, group_id, chosen_words)
+            bot.reply_to(message, "Finished! Saved {} words to {} group".format(len(chosen_words), group_name),
+                        reply_markup=empty_markup)
+            return
+        elif message.text == "/next":
+            batch_num += 1
+            if batch_num * batch_size >= len(all_words):
+                if len(chosen_words) > 0:
+                    save_words_to_group(pool, message.chat.id, group_id, chosen_words)
+                bot.reply_to(
+                    message,
+                    "That's all the words we have! Saved {} words to {} group".format(len(chosen_words), group_name),
+                    reply_markup=empty_markup
+                )
+                return
+            
+            process_words_batch(message, language=language, group_id=group_id, group_name=group_name,
+                                all_words=all_words,
+                                current_words=None, batch_num=batch_num, batch_size=batch_size,
+                                is_start=True, chosen_words=chosen_words)
+
+        elif message.text in current_words:
+            current_words.remove(message.text)
+            chosen_words.add(message.text)
+            markup = get_keyboard_markup(current_words, ["/exit", "/next"])
+            bot.reply_to(message, "✔️", reply_markup=markup)
+            bot.register_next_step_handler(message, process_words_batch,
+                                        language=language, group_id=group_id, group_name=group_name,
+                                        all_words=all_words, current_words=current_words,
+                                        batch_num=batch_num, batch_size=batch_size, chosen_words=chosen_words)
+        else:
+            bot.reply_to(message, "Not a word from the list, ignoring that.")
+            bot.register_next_step_handler(message, process_words_batch,
+                                        language=language, group_id=group_id, group_name=group_name,
+                                        all_words=all_words, current_words=current_words,
+                                        batch_num=batch_num, batch_size=batch_size, chosen_words=chosen_words)
+    except Exception as e:
+        logging.error("word batch failed", exc_info=e)
+
+
+def process_choose_group_to_add_words(message, language):
+    try:
+        if message.text == "/exit":
+            bot.reply_to(message, "Exited!", reply_markup=empty_markup)
+            return
+        
+        groups = get_group_by_name(pool, message.chat.id, language, message.text)
+        
+        if len(groups) == 0:
+            bot.reply_to(message, "You don't have a group with that name, try again /show_groups",
+                         reply_markup=empty_markup)
+            return
+        
+        if not groups[0]["is_creator"]:
+            bot.reply_to(message, "You are not a creator of this group, can't edit it.",
+                         reply_markup=empty_markup)
+            return
+        
+        group_id = groups[0]["group_id"].decode("utf-8")
+        group_name = groups[0]["group_name"].decode("utf-8")
+        
+        vocabulary = get_full_vocab(pool, message.chat.id, language)
+        words_in_group = set([entry["word"] for entry in get_group_contents(pool, group_id)])
+        
+        words_to_add = []
+        for entry in vocabulary:
+            if entry["word"] in words_in_group:
+                continue
+            words_to_add.append(
+                "{} - {}".format(
+                    entry["word"],
+                    " / ".join(json.loads(entry["translation"]))
+                )
+            )
+        
+        if len(words_to_add) == 0:
+            bot.reply_to(message, "There're no more words to add to this group.")
+            return
+        process_words_batch(message, language=language, group_id=group_id, group_name=group_name,
+                            all_words=words_to_add, current_words=None,
+                            batch_num=0, batch_size=10, is_start=True)
+    except Exception as e:
+        logging.error("group adding words failed", exc_info=e)
 
 
 @bot.message_handler(commands=["train"])
