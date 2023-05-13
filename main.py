@@ -253,8 +253,8 @@ def handle_delete_words(message):
     try:
         reply_message = bot.reply_to(message, "Write words to delete. Each word on new line.")
         bot.register_next_step_handler(reply_message, process_deleting_words, language=language)
-    except Exception as Argument:
-        logging.exception("deleting words failed")
+    except Exception as e:
+        logging.exception("deleting words failed", exc_info=e)
 
 
 def process_deleting_words(message, language):
@@ -266,10 +266,10 @@ def process_deleting_words(message, language):
             message,
             "Deleted {} words:\n".format(len(existing_words)) +
             "\n".join([entry["word"] for entry in existing_words]) +
-            "" if len(existing_words) == len(words) else "\n\nOther words are unknown."
+            ("" if len(existing_words) == len(words) else "\n\nOther words are unknown.")
         )
-    except Exception as Argument:
-        logging.exception("processing words deleting failed")
+    except Exception as e:
+        logging.exception("processing words deleting failed", exc_info=e)
 
 
 @bot.message_handler(commands=["create_group"])
@@ -281,7 +281,7 @@ def handle_create_group(message):
     try:
         reply_message = bot.reply_to(
             message,
-            "Write new group name. It should consits only of latin letters, digits and underscores.\n"
+            "Write new group name. It should consist only of latin letters, digits and underscores.\n"
             "For example, 'nouns_type_3'"
         )
         bot.register_next_step_handler(reply_message, process_group_creation, language=current_language)
@@ -323,13 +323,12 @@ def process_show_groups(message, language):
         return
     
     markup = types.ReplyKeyboardMarkup(row_width=3)
-    for group in groups:
-        markup.add(telebot.types.KeyboardButton(group["group_name"].decode()))
+    markup.add(*sorted([group["group_name"].decode() for group in groups]), row_width=3)
     markup.add(telebot.types.KeyboardButton("/exit"))
     
     reply_message = bot.send_message(
         message.chat.id,
-        "Your groups\n",
+        "Choose one of your groups\n",
         reply_markup=markup
     )
     return reply_message
@@ -348,7 +347,7 @@ def handle_show_groups(message):
 def process_show_group(message, language):
     try:
         if message.text == "/exit":
-            bot.reply_to(message, "Exited!", reply_markup=empty_markup)
+            bot.reply_to(message, "Finished group showing!", reply_markup=empty_markup)
             return
         
         groups = get_group_by_name(pool, message.chat.id, language, message.text)
@@ -393,11 +392,12 @@ def handle_group_add_words(message):
         logging.error("showing groups to add words to failed", exc_info=e)
 
 
-def get_keyboard_markup(choices, additional_commands=[], row_width=2):
+def get_keyboard_markup(choices, additional_commands=[], row_width=3):
     markup = types.ReplyKeyboardMarkup(row_width=row_width, resize_keyboard=True)
-    markup.add(*sorted(list(choices)), row_width=2)
-    for command in additional_commands:
-        markup.add(telebot.types.KeyboardButton(command), row_width=1)
+    if len(choices) % row_width != 0:
+        choices.extend([""] * (row_width - len(choices) % row_width))
+    markup.add(*choices, row_width=row_width)
+    markup.add(*additional_commands, row_width=row_width)
     return markup
 
 
@@ -407,6 +407,7 @@ def save_words_to_group(chat_id, language, group_id, words):
     add_words_to_group(pool, chat_id, language, group_id, original_words)
 
 
+# TODO: do not delete used words, but change the to blank buttons
 def process_words_batch(message, language, group_id, group_name, all_words, current_words,
                         batch_num, batch_size, is_start=False, chosen_words=set()):
     try:
@@ -418,7 +419,7 @@ def process_words_batch(message, language, group_id, group_name, all_words, curr
         if is_start: # new page
             markup = get_keyboard_markup(
                 all_words[batch_num * batch_size:(batch_num + 1) * batch_size],
-                ["/exit", "/next"]
+                ["/cancel", "/exit", "/next"]
             )
             current_words = set(
                 all_words[batch_num * batch_size:(batch_num + 1) * batch_size]
@@ -442,11 +443,14 @@ def process_words_batch(message, language, group_id, group_name, all_words, curr
             bot.reply_to(message, "Finished! Saved {} words to {} group".format(len(chosen_words), group_name),
                         reply_markup=empty_markup)
             return
+        elif message.text == "/cancel":
+            bot.reply_to(message, "Cancelled! Saved no words.", reply_markup=empty_markup)
+            return
         elif message.text == "/next":
             batch_num += 1
             if batch_num * batch_size >= len(all_words):
                 if len(chosen_words) > 0:
-                    save_words_to_group(pool, message.chat.id, group_id, chosen_words)
+                    save_words_to_group(message.chat.id, language, group_id, chosen_words)
                 bot.reply_to(
                     message,
                     "That's all the words we have! Saved {} words to {} group".format(len(chosen_words), group_name),
@@ -460,10 +464,7 @@ def process_words_batch(message, language, group_id, group_name, all_words, curr
                                 is_start=True, chosen_words=chosen_words)
 
         elif message.text in current_words:
-            current_words.remove(message.text)
             chosen_words.add(message.text)
-            markup = get_keyboard_markup(current_words, ["/exit", "/next"])
-            bot.reply_to(message, "✔️", reply_markup=markup)
             bot.register_next_step_handler(message, process_words_batch,
                                         language=language, group_id=group_id, group_name=group_name,
                                         all_words=all_words, current_words=current_words,
@@ -518,7 +519,7 @@ def process_choose_group_to_add_words(message, language):
             return
         process_words_batch(message, language=language, group_id=group_id, group_name=group_name,
                             all_words=words_to_add, current_words=None,
-                            batch_num=0, batch_size=10, is_start=True)
+                            batch_num=0, batch_size=9, is_start=True)
     except Exception as e:
         logging.error("group adding words failed", exc_info=e)
 
