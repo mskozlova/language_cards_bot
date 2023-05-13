@@ -6,13 +6,17 @@ import ydb
 
 USERS_TABLE_PATH = "users"
 VOCABS_TABLE_PATH = "vocabularies"
+GROUPS_TABLE_PATH = "groups"
+GROUPS_CONTENTS_TABLE_PATH = "group_contents"
 TRAINING_SESSIONS_TABLE_PATH = "training_sessions"
 TRAINING_SESSIONS_INFO_TABLE_PATH = "training_session_info"
 WORDS_UPDATE_BUCKET_SIZE = 20
+GROUPS_UPDATE_BUCKET_SIZE = 20
 
 VOCABS_UPDATE_VALUES = "(CAST({} AS Uint64), '{}', CAST('{}' AS Utf8), " \
                        "{}, {}, CAST({} AS Float), CAST({} AS Float), " \
                        "CAST('{}' AS Utf8))"
+GROUP_UPDATE_VALUES = "(CAST({} AS Uint64), '{}', '{}', CAST('{}' AS Utf8))"
 
 
 def get_nullable_str(value):
@@ -31,20 +35,21 @@ def get_new_session_id():
     return int(datetime.datetime.timestamp(datetime.datetime.now()))
 
 
-def update_user(pool, user):
-    def callee(session):
-        session.transaction().execute(
-            """
-            UPSERT INTO `{}` (chat_id, current_lang, languages) VALUES
-                ({}, '{}', '{}');
-            """.format(
-                USERS_TABLE_PATH, user.chat_id, user.current_lang,
-                json.dumps(list(user.vocabs.keys()), ensure_ascii=False)
-            ),
-            commit_tx=True,
-        )
+# TODO: use prepared statement
+# def update_user(pool, user):
+#     def callee(session):
+#         session.transaction().execute(
+#             """
+#             UPSERT INTO `{}` (chat_id, current_lang, languages) VALUES
+#                 ({}, '{}', '{}');
+#             """.format(
+#                 USERS_TABLE_PATH, user.chat_id, user.current_lang,
+#                 json.dumps(list(user.vocabs.keys()), ensure_ascii=False)
+#             ),
+#             commit_tx=True,
+#         )
 
-    return pool.retry_operation_sync(callee)
+#     return pool.retry_operation_sync(callee)
 
 
 def get_user_info(pool, chat_id):
@@ -193,6 +198,7 @@ def get_words_from_vocab(pool, chat_id, language, words):
 
 
 def delete_words_from_vocab(pool, chat_id, language, words):
+    # TODO: delete from training sessions
     def callee(session):
         session.transaction().execute(
             """    
@@ -663,3 +669,114 @@ def cleanup_scores(pool, chat_id):
         )
 
     return pool.retry_operation_sync(callee)
+
+
+def get_group_by_name(pool, chat_id, language, group_name):
+    def callee(session):
+        result_sets = session.transaction().execute(
+            """    
+            SELECT group_id, group_name, is_creator FROM `{}`
+            WHERE
+                chat_id == {}
+                AND language == '{}'
+                AND group_name == '{}'
+            """.format(
+                GROUPS_TABLE_PATH, chat_id, language, group_name
+            ),
+            commit_tx=True,
+        )
+        return result_sets[0].rows
+
+    return pool.retry_operation_sync(callee)
+
+
+def add_group(pool, chat_id, language, group_name, group_id, is_creator):
+    def callee(session):
+        session.transaction().execute(
+            """    
+            INSERT INTO `{}` (chat_id, language, group_id, group_name, is_creator) VALUES
+                ({}, '{}', '{}', '{}', {});
+            """.format(
+                GROUPS_TABLE_PATH, chat_id, language,
+                group_id, group_name, is_creator
+            ),
+            commit_tx=True,
+        )
+
+    return pool.retry_operation_sync(callee)
+
+
+def get_all_groups(pool, chat_id, language):
+    def callee(session):
+        result_sets = session.transaction().execute(
+            """    
+            SELECT group_name, group_id FROM `{}`
+            WHERE
+                chat_id == {}
+                AND language == '{}'
+            """.format(
+                GROUPS_TABLE_PATH, chat_id, language
+            ),
+            commit_tx=True,
+        )
+        return result_sets[0].rows
+
+    return pool.retry_operation_sync(callee)
+
+
+def get_group_contents(pool, group_id):
+    def callee(session):
+        result_sets = session.transaction().execute(
+            """    
+            SELECT
+                group_contents.word AS word,
+                translation,
+                score_from,
+                score_to,
+            FROM `{}` AS group_contents
+            INNER JOIN `{}` AS vocabs ON
+                group_contents.chat_id == vocabs.chat_id
+                AND group_contents.language == vocabs.language
+                AND group_contents.word == vocabs.word
+            WHERE
+                group_contents.group_id == '{}'
+            """.format(
+                GROUPS_CONTENTS_TABLE_PATH, VOCABS_TABLE_PATH, group_id
+            ),
+            commit_tx=True,
+        )
+        return result_sets[0].rows
+
+    return pool.retry_operation_sync(callee)
+
+# TODO: join 2 bulk updates
+def bulk_update_group(pool, values):
+    def callee(session):
+        session.transaction().execute(
+            """
+            UPSERT INTO `{}` (chat_id, language, group_id, word) VALUES
+                {};
+            """.format(
+                GROUPS_CONTENTS_TABLE_PATH, values
+            ),
+            commit_tx=True,
+        )
+
+    return pool.retry_operation_sync(callee)
+
+
+def prepare_groups_data(chat_id, language, group_id, words):
+    data_list = []
+    for word in words:
+        data_list.append((
+            GROUP_UPDATE_VALUES.format(
+                chat_id, language, group_id, word
+            )
+        ))
+    return data_list
+
+
+def add_words_to_group(pool, chat_id, language, group_id, words):
+    data = prepare_groups_data(chat_id, language, group_id, words)
+    for i in range(0, len(data), GROUPS_UPDATE_BUCKET_SIZE):
+        bulk_update_group(pool, ",\n".join(data[i:i+GROUPS_UPDATE_BUCKET_SIZE]))
