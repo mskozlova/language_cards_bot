@@ -366,6 +366,48 @@ def create_training_session(pool, chat_id, session_info):
     return pool.retry_operation_sync(callee)
 
 
+def create_group_training_session(pool, chat_id, session_info):
+    def callee(session):
+        session.transaction().execute(
+            """
+            $session_id = {};
+            $chat_id = {};
+            $language = "{}";
+            $length = {};
+            $group_id = "{}";
+            
+            $words_sample = (
+                SELECT
+                    $chat_id AS chat_id,
+                    $session_id AS session_id,
+                    v.word AS word,
+                    v.translation AS translation,
+                    ROW_NUMBER() OVER w AS word_idx,
+                FROM `{}` AS v
+                INNER JOIN `{}` AS g USING (chat_id, language, word)
+                WHERE
+                    v.chat_id == $chat_id
+                    AND v.language == $language
+                    AND g.group_id == $group_id
+                WINDOW w AS (
+                    ORDER BY RandomNumber(CAST($session_id AS String) || v.word)
+                )
+            );
+
+            UPSERT INTO `{}`
+            SELECT * FROM $words_sample
+            WHERE word_idx <= $length;
+            """.format(
+                session_info["session_id"], chat_id, session_info["language"],
+                session_info["duration"], session_info["group_id"],
+                VOCABS_TABLE_PATH, GROUPS_CONTENTS_TABLE_PATH, TRAINING_SESSIONS_TABLE_PATH
+            ),
+            commit_tx=True,
+        )
+
+    return pool.retry_operation_sync(callee)
+
+
 def get_training_words(pool, chat_id, session_info):
     def callee(session):
         result_sets = session.transaction().execute(
