@@ -30,7 +30,7 @@ pool = ydb.SessionPool(ydb_driver)
 
 
 # CONSTANTS
-TRAIN_STRATEGY_OPTIONS = ["random", "new", "bad"]
+TRAIN_STRATEGY_OPTIONS = ["random", "new", "bad", "group"]
 TRAIN_DIRECTION_OPTIONS = {"➡️ㅤ": "to", "⬅️ㅤ": "from"}  # invisible symbols to avoid large emoji
 TRAIN_COUNT_OPTIONS = ["10", "20", "All"]
 TRAIN_HINTS_OPTIONS = ["no hints", "a****z", "test"]
@@ -182,6 +182,7 @@ def process_word_translation(message, language, words, translations):
         logging.error("Word translating failed: {}".format(e))
         
 
+# TODO: A request to the Telegram API was unsuccessful. Error code: 400. Description: Bad Request: message is too long
 @bot.message_handler(commands=["show_words"])
 def handle_show_words(message):
     language = get_current_language(pool, message.chat.id)
@@ -335,7 +336,7 @@ def process_show_groups(message, language):
         bot.reply_to(message, "You don't have any groups yet, try /create_group")
         return
     
-    markup = types.ReplyKeyboardMarkup(row_width=3)
+    markup = types.ReplyKeyboardMarkup(row_width=3, resize_keyboard=True)
     markup.add(*sorted([group["group_name"].decode() for group in groups]), row_width=3)
     markup.add(telebot.types.KeyboardButton("/exit"))
     
@@ -544,7 +545,7 @@ def handle_train(message):
         handle_language_not_set(message)
         return
     try:
-        markup = types.ReplyKeyboardMarkup(row_width=4, one_time_keyboard=True)
+        markup = types.ReplyKeyboardMarkup(row_width=4, one_time_keyboard=True, resize_keyboard=True)
         markup.add(*TRAIN_STRATEGY_OPTIONS, row_width=4)
         markup.add(telebot.types.KeyboardButton("/cancel"))
         reply_message = bot.send_message(
@@ -553,8 +554,8 @@ def handle_train(message):
             "Now available:\n\n"
             "- random - simply random words\n"
             "- new - only words that you've seen not more than 2 times\n"
-            "- bad - only words with weak score",
-            # "- group - words from a particular group",
+            "- bad - only words with weak score\n"
+            "- group - words from a particular group",
             reply_markup=markup
         )
         session_info = {"language": current_language}
@@ -564,15 +565,8 @@ def handle_train(message):
         logging.exception("starting train failed")
 
 
-def process_choose_strategy(message, session_info, messages):
-    if message.text == "/cancel":
-        bot.reply_to(message, "Cancelled training, come back soon and /train again!", reply_markup=empty_markup)
-        return
-    if message.text not in TRAIN_STRATEGY_OPTIONS:
-        bot.reply_to(message, "This strategy is not supported. Try again /train", reply_markup=empty_markup)
-        return
-
-    markup = types.ReplyKeyboardMarkup(row_width=len(TRAIN_DIRECTION_OPTIONS), one_time_keyboard=True)
+def init_direction_choice(message, session_info, messages):
+    markup = types.ReplyKeyboardMarkup(row_width=len(TRAIN_DIRECTION_OPTIONS), one_time_keyboard=True, resize_keyboard=True)
     markup.add(*list(TRAIN_DIRECTION_OPTIONS.keys()), row_width=len(TRAIN_DIRECTION_OPTIONS))
     markup.add(telebot.types.KeyboardButton("/cancel"))
     reply_message = bot.send_message(
@@ -580,9 +574,46 @@ def process_choose_strategy(message, session_info, messages):
         "Choose training direction: to ➡️, or from ⬅️ your current language",
         reply_markup=markup
     )
-    session_info["strategy"] = message.text
-    messages.extend([message, reply_message])
+    messages.extend([reply_message])
     bot.register_next_step_handler(reply_message, process_choose_direction, session_info=session_info, messages=messages)
+    
+
+def process_choose_group_for_training(message, session_info, messages):
+    if message.text == "/exit":
+        bot.reply_to(message, "Cancelled training, come back soon and /train again!", reply_markup=empty_markup)
+        return
+        
+    groups = get_group_by_name(pool, message.chat.id, session_info["language"], message.text)
+    if len(groups) == 0:
+        bot.reply_to(message, "You don't have a group with that name, try again /train",
+                     reply_markup=empty_markup)
+        return
+    
+    group_id = groups[0]["group_id"].decode("utf-8")
+    session_info["group_name"] = message.text
+    session_info["group_id"] = group_id
+    messages.append(message)
+    
+    init_direction_choice(message, session_info, messages)
+
+
+def process_choose_strategy(message, session_info, messages):
+    if message.text == "/cancel":
+        bot.reply_to(message, "Cancelled training, come back soon and /train again!", reply_markup=empty_markup)
+        return
+    if message.text not in TRAIN_STRATEGY_OPTIONS:
+        bot.reply_to(message, "This strategy is not supported. Try again /train", reply_markup=empty_markup)
+        return
+    session_info["strategy"] = message.text
+    messages.extend([message])
+    
+    if message.text == "group":
+        reply_message = process_show_groups(message, session_info["language"])
+        messages.extend([reply_message])
+        bot.register_next_step_handler(reply_message, process_choose_group_for_training,
+                                       session_info=session_info, messages=messages)
+    else:
+        init_direction_choice(message, session_info, messages)
 
 
 def process_choose_direction(message, session_info, messages):
@@ -593,7 +624,7 @@ def process_choose_direction(message, session_info, messages):
         bot.reply_to(message, "This direction is not supported. Try again /train", reply_markup=empty_markup)
         return
 
-    markup = types.ReplyKeyboardMarkup(row_width=len(TRAIN_COUNT_OPTIONS), one_time_keyboard=True)
+    markup = types.ReplyKeyboardMarkup(row_width=len(TRAIN_COUNT_OPTIONS), one_time_keyboard=True, resize_keyboard=True)
     markup.add(*TRAIN_COUNT_OPTIONS, row_width=len(TRAIN_COUNT_OPTIONS))
     markup.add(telebot.types.KeyboardButton("/cancel"))
     reply_message = bot.send_message(
@@ -614,7 +645,7 @@ def process_choose_duration(message, session_info, messages):
         bot.reply_to(message, "This duration is not supported. Try again /train", reply_markup=empty_markup)
         return
 
-    markup = types.ReplyKeyboardMarkup(row_width=len(TRAIN_HINTS_OPTIONS), one_time_keyboard=True)
+    markup = types.ReplyKeyboardMarkup(row_width=len(TRAIN_HINTS_OPTIONS), one_time_keyboard=True, resize_keyboard=True)
     markup.add(*TRAIN_HINTS_OPTIONS, row_width=len(TRAIN_HINTS_OPTIONS))
     markup.add(telebot.types.KeyboardButton("/cancel"))
     reply_message = bot.send_message(
@@ -652,7 +683,8 @@ def format_train_buttons(translation, hints, hints_type):
     random.shuffle(all_words_list)
     markup = types.ReplyKeyboardMarkup(
         row_width=2,
-        one_time_keyboard=True
+        one_time_keyboard=True,
+        resize_keyboard=True
     )
     markup.add(*[telebot.types.KeyboardButton(w.split("/")[0]) for w in all_words_list])
     return markup
@@ -753,7 +785,11 @@ def process_choose_hints(message, session_info, messages):
         messages.append(message)
         
         init_training_session(pool, message.chat.id, session_info)
-        create_training_session(pool, message.chat.id, session_info) # TODO: another request for group training
+        if session_info["strategy"] != "group":
+            create_training_session(pool, message.chat.id, session_info)
+        else:
+            create_group_training_session(pool, message.chat.id, session_info)
+        
         words = get_training_words(pool, message.chat.id, session_info)
         
         if len(words) == 0:
@@ -770,6 +806,8 @@ def process_choose_hints(message, session_info, messages):
             "Strategy: {}\nDuration: {}\nDirection: {}\nHints: {}".format(
                 session_info["strategy"], len(words),
                 session_info["direction"], session_info["hints"]
+            ) + (
+                "\n\nGroup name: {}".format(session_info["group_name"]) if "group_name" in session_info else ""
             ),
             reply_markup=empty_markup
         )
