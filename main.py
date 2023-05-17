@@ -29,6 +29,15 @@ ydb_driver.wait(fail_fast=True, timeout=30)
 pool = ydb.SessionPool(ydb_driver)
 
 
+# CONSTANTS
+TRAIN_STRATEGY_OPTIONS = ["random", "new", "bad"]
+TRAIN_DIRECTION_OPTIONS = {"➡️ㅤ": "to", "⬅️ㅤ": "from"}  # invisible symbols to avoid large emoji
+TRAIN_COUNT_OPTIONS = ["10", "20", "All"]
+TRAIN_HINTS_OPTIONS = ["no hints", "a****z", "test"]
+TRAIN_MAX_N_WORDS = 9999;
+TRAIN_CORRECT_ANSWER = "✅ㅤ" # invisible symbol to avoid large emoji
+TRAIN_WRONG_ANSWER = "❌ {}"
+
 ###################
 # Command handlers
 ###################
@@ -45,6 +54,9 @@ def handle_help(message):
                      "- /show_words to print out all words you saved for current language.\n"
                      "- /delete_words to delete some words from current vocabulary.\n"
                      "- /create_group to create new group for words.\n"
+                     "- /show_groups to show your existing groups for current language.\n"
+                     "- /group_add_words to add some words from you vocabulary to one of your groups.\n"
+                     # TODO "- /group_delete_words to delete some words from one of your groups.\n"
                      "- /train to choose training strategy and start training.\n"
                      "- /stop to stop training session without saving the results.\n")
                      #"- /forget_me to delete all the information I have about you.\n")
@@ -83,6 +95,7 @@ def handle_language_not_set(message):
                      "Language not set. Set in with command /set_language.")
 
 
+# TODO: manage possible timeout
 @bot.message_handler(commands=["add_words"])
 def handle_add_words(message):
     language = get_current_language(pool, message.chat.id)
@@ -526,16 +539,14 @@ def process_choose_group_to_add_words(message, language):
 
 @bot.message_handler(commands=["train"])
 def handle_train(message):
-    # TODO: fails if there are no words
     current_language = get_current_language(pool, message.chat.id)
     if current_language is None:
         handle_language_not_set(message)
         return
     try:
-        markup = types.ReplyKeyboardMarkup(row_width=3)
-        markup.add(telebot.types.KeyboardButton("random"))
-        markup.add(telebot.types.KeyboardButton("new"))
-        markup.add(telebot.types.KeyboardButton("bad"))
+        markup = types.ReplyKeyboardMarkup(row_width=4, one_time_keyboard=True)
+        markup.add(*TRAIN_STRATEGY_OPTIONS, row_width=4)
+        markup.add(telebot.types.KeyboardButton("/cancel"))
         reply_message = bot.send_message(
             message.chat.id,
             "Choose training strategy.\n"
@@ -543,54 +554,82 @@ def handle_train(message):
             "- random - simply random words\n"
             "- new - only words that you've seen not more than 2 times\n"
             "- bad - only words with weak score",
+            # "- group - words from a particular group",
             reply_markup=markup
         )
-        bot.register_next_step_handler(reply_message, process_choose_strategy)
+        session_info = {"language": current_language}
+        messages = [reply_message]
+        bot.register_next_step_handler(reply_message, process_choose_strategy, session_info=session_info, messages=messages)
     except Exception as Argument:
         logging.exception("starting train failed")
 
 
-def process_choose_strategy(message):
-    if message.text not in ("random", "new", "bad"):
+def process_choose_strategy(message, session_info, messages):
+    if message.text == "/cancel":
+        bot.reply_to(message, "Cancelled training, come back soon and /train again!", reply_markup=empty_markup)
+        return
+    if message.text not in TRAIN_STRATEGY_OPTIONS:
         bot.reply_to(message, "This strategy is not supported. Try again /train", reply_markup=empty_markup)
         return
-    session_id = get_new_session_id()
-    language = get_current_language(pool, message.chat.id)
-    init_training_session(pool, message.chat.id, language, session_id, message.text)
-    markup = types.ReplyKeyboardMarkup(row_width=2)
-    markup.add(telebot.types.KeyboardButton("5 to"))
-    markup.add(telebot.types.KeyboardButton("10 to"))
-    markup.add(telebot.types.KeyboardButton("5 from"))
-    markup.add(telebot.types.KeyboardButton("10 from"))
+
+    markup = types.ReplyKeyboardMarkup(row_width=len(TRAIN_DIRECTION_OPTIONS), one_time_keyboard=True)
+    markup.add(*list(TRAIN_DIRECTION_OPTIONS.keys()), row_width=len(TRAIN_DIRECTION_OPTIONS))
+    markup.add(telebot.types.KeyboardButton("/cancel"))
     reply_message = bot.send_message(
         message.chat.id,
-        "Choose duration of training and order to/from your set language.",
+        "Choose training direction: to ➡️, or from ⬅️ your current language",
         reply_markup=markup
     )
-    bot.register_next_step_handler(reply_message, process_choose_length_and_order)
+    session_info["strategy"] = message.text
+    messages.extend([message, reply_message])
+    bot.register_next_step_handler(reply_message, process_choose_direction, session_info=session_info, messages=messages)
 
 
-def process_choose_length_and_order(message):
-    if len(message.text.split(" ")) != 2 or message.text.split(" ")[1] not in ("to", "from"):
-        bot.reply_to(message, "This length and order is not supported. Try again /train",
-                     reply_markup=empty_markup)
+def process_choose_direction(message, session_info, messages):
+    if message.text == "/cancel":
+        bot.reply_to(message, "Cancelled training, come back soon and /train again!", reply_markup=empty_markup)
         return
-    session_id = get_current_session_id(pool, message.chat.id)
-    length, order = message.text.split(" ")
-    set_session_order_and_length(pool, message.chat.id, session_id, order, length)
-    markup = types.ReplyKeyboardMarkup(row_width=1)
-    markup.add(telebot.types.KeyboardButton("no hints"))
-    markup.add(telebot.types.KeyboardButton("a****z"))
-    markup.add(telebot.types.KeyboardButton("test"))
+    if message.text not in TRAIN_DIRECTION_OPTIONS.keys():
+        bot.reply_to(message, "This direction is not supported. Try again /train", reply_markup=empty_markup)
+        return
+
+    markup = types.ReplyKeyboardMarkup(row_width=len(TRAIN_COUNT_OPTIONS), one_time_keyboard=True)
+    markup.add(*TRAIN_COUNT_OPTIONS, row_width=len(TRAIN_COUNT_OPTIONS))
+    markup.add(telebot.types.KeyboardButton("/cancel"))
     reply_message = bot.send_message(
         message.chat.id,
-        "Choose hints.",
+        "Choose duration of your training. You can also type in any number.",
         reply_markup=markup
     )
-    bot.register_next_step_handler(reply_message, process_choose_hints)
+    session_info["direction"] = TRAIN_DIRECTION_OPTIONS[message.text]
+    messages.extend([message, reply_message])
+    bot.register_next_step_handler(reply_message, process_choose_duration, session_info, messages=messages)
+
+
+def process_choose_duration(message, session_info, messages):
+    if message.text == "/cancel":
+        bot.reply_to(message, "Cancelled training, come back soon and /train again!", reply_markup=empty_markup)
+        return
+    if not message.text.isdigit() and message.text not in TRAIN_COUNT_OPTIONS:
+        bot.reply_to(message, "This duration is not supported. Try again /train", reply_markup=empty_markup)
+        return
+
+    markup = types.ReplyKeyboardMarkup(row_width=len(TRAIN_HINTS_OPTIONS), one_time_keyboard=True)
+    markup.add(*TRAIN_HINTS_OPTIONS, row_width=len(TRAIN_HINTS_OPTIONS))
+    markup.add(telebot.types.KeyboardButton("/cancel"))
+    reply_message = bot.send_message(
+        message.chat.id,
+        "Choose hints for your training.\n"
+        "Training with hints will not affect you word scores. Choose 'no hints' to track your progress.",
+        reply_markup=markup
+    )
+    session_info["duration"] = int(message.text) if message.text.isdigit() else TRAIN_MAX_N_WORDS
+    messages.extend([message, reply_message])
+    bot.register_next_step_handler(reply_message, process_choose_hints, session_info, messages=messages)
 
 
 def get_az_hint(word):
+    # TODO: mask only one of possible translations
     if len(word) <= 4:
         return "*" * len(word)
     return word[0] + "*" * (len(word) - 2) + word[-1]
@@ -600,7 +639,7 @@ def format_train_message(word, translation, hints_type):
     if hints_type != "a****z":
         return word
     else:
-        return "{}\nHint: {}".format(
+        return "{}\n{}".format(
             word,
             get_az_hint(translation)
         )
@@ -612,101 +651,142 @@ def format_train_buttons(translation, hints, hints_type):
     all_words_list = hints + [translation, ]
     random.shuffle(all_words_list)
     markup = types.ReplyKeyboardMarkup(
-        row_width=2
+        row_width=2,
+        one_time_keyboard=True
     )
     markup.add(*[telebot.types.KeyboardButton(w.split("/")[0]) for w in all_words_list])
     return markup
 
 
-def process_choose_hints(message):
-    if message.text not in ("no hints", "a****z", "test"):
-        bot.reply_to(message, "These hints are not supported. Try again /train",
-                     reply_markup=empty_markup)
-        return
-    session_id = get_current_session_id(pool, message.chat.id)
-    set_session_hints(pool, message.chat.id, session_id, message.text)
-    session_info = get_session_info(pool, message.chat.id, session_id)
-    current_lang = get_current_language(pool, message.chat.id)
-    create_training_session(pool, message.chat.id, session_id, current_lang, session_info["length"],
-                            session_info["strategy"].decode("utf-8"), session_info["order"].decode("utf-8"))
-    update_length(pool, message.chat.id, session_id)
-    session_info = get_session_info(pool, message.chat.id, session_id)
-    bot.reply_to(message,
-                 "Starting training.\n" +
-                 "Strategy: {}\nLength: {}\nLanguage order: {}\nHints: {}".format(
-                     session_info["strategy"].decode("utf-8"), session_info["length"],
-                     session_info["order"].decode("utf-8"), session_info["hints"].decode("utf-8")
-                 ),
-                 reply_markup=empty_markup)
-    try:
-        next_word = get_next_word(pool, message.chat.id, session_id)
-        hints = get_test_hints(pool, message.chat.id, session_id, next_word["word"], current_lang)
-        session_info = get_session_info(pool, message.chat.id, session_id)
-        reply_message = bot.send_message(
-            message.chat.id,
-            format_train_message(
-                get_word(next_word, next_word["order"].decode("utf-8")),
-                get_translation(next_word, next_word["order"].decode("utf-8")),
-                session_info["hints"].decode("utf-8")
-            ),
-            reply_markup=format_train_buttons(
-                get_translation(next_word, next_word["order"].decode("utf-8")),
-                [get_translation(hint, next_word["order"].decode("utf-8")) for hint in hints],
-                session_info["hints"].decode("utf-8")
-            )
-        )
-        bot.register_next_step_handler(reply_message, process_translation)
-    except IndexError:
-        bot.reply_to(message, "There are no words in this strategy. Try another.\n/train")
+def sample_hints(current_word, words, max_hints_number=3):
+    other_words = list(filter(lambda w: w["word"] != current_word["word"], words))
+    hints = random.sample(other_words, k=min(len(other_words), max_hints_number))
+    return hints
 
 
-def process_translation(message):
-    session_id = get_current_session_id(pool, message.chat.id)
-    current_lang = get_current_language(pool, message.chat.id)
+def get_train_step(message, words, session_info, step, scores):
     try:
-        next_word = get_next_word(pool, message.chat.id, session_id)
         if message.text == "/stop":
-            bot.reply_to(message, "Session stopped, results not saved.\nLet's /train again?",
-                         reply_markup=empty_markup)
+            bot.send_message(
+                message.chat.id,
+                "Session stopped, results not saved.\nLet's /train again?",
+                reply_markup=empty_markup
+            )
             return
+        if step != 0: # first iteration
+            word = words[step - 1]
+            is_correct = compare_user_input_with_db(
+                message.text,
+                word,
+                session_info["direction"]
+            )
+            scores.append(int(is_correct))
+            if is_correct:
+                bot.send_message(
+                    message.chat.id,
+                    TRAIN_CORRECT_ANSWER,
+                    reply_markup=empty_markup
+                )
+            else:
+                bot.send_message(
+                    message.chat.id,
+                    TRAIN_WRONG_ANSWER.format(
+                        get_translation(word, session_info["direction"])
+                    ),
+                    reply_markup=empty_markup
+                )
 
-        score = compare_user_input_with_db(message.text, next_word, next_word["order"].decode("utf-8"))
-        update_score(pool, message.chat.id, session_id, score)
-        current_scores = get_scores(pool, message.chat.id, session_id)
-        if score == 1:
+        if step == len(words): # training complete
+            # TODO: different messages for different results
+            if session_info["hints"] == "no hints":
+                set_training_scores(
+                    pool, message.chat.id, session_info["session_id"],
+                    list(range(1, len(words) + 1)), scores
+                )
+                update_final_scores(pool, message.chat.id, session_info)
+            else:
+                bot.send_message(
+                    message.chat.id, "Scores are not saved because hints were used."
+                )
             bot.send_message(
                 message.chat.id,
-                "Correct! Score: {}/{}".format(int(current_scores["successes"]), current_scores["words"])
+                "Score: {} / {}\n🎉 Training complete!\nLet's /train again?".format(sum(scores), len(words)),
+                reply_markup=empty_markup
             )
-        else:
-            bot.send_message(
-                message.chat.id,
-                "Wrong! Correct translation: {}\n".format(get_translation(next_word, next_word["order"].decode("utf-8"))) +
-                "Score: {}/{}".format(int(current_scores["successes"]), current_scores["words"])
-            )
-
-        next_word = get_next_word(pool, message.chat.id, session_id)
-        hints = get_test_hints(pool, message.chat.id, session_id, next_word["word"], current_lang)
-        session_info = get_session_info(pool, message.chat.id, session_id)
+            return
+        
+        next_word = words[step]
+        hints = sample_hints(next_word, words, 3)
         reply_message = bot.send_message(
             message.chat.id,
             format_train_message(
-                get_word(next_word, next_word["order"].decode("utf-8")),
-                get_translation(next_word, next_word["order"].decode("utf-8")),
-                session_info["hints"].decode("utf-8")
+                get_word(next_word, session_info["direction"]),
+                get_translation(next_word, session_info["direction"]),
+                session_info["hints"]
             ),
             reply_markup=format_train_buttons(
-                get_translation(next_word, next_word["order"].decode("utf-8")),
-                [get_translation(hint, next_word["order"].decode("utf-8")) for hint in hints],
-                session_info["hints"].decode("utf-8")
+                get_translation(next_word, session_info["direction"]),
+                [get_translation(hint, session_info["direction"]) for hint in hints],
+                session_info["hints"]
             )
         )
-        bot.register_next_step_handler(reply_message, process_translation)
-    except IndexError:
-        cleanup_scores(pool, message.chat.id)
-        update_final_scores(pool, message.chat.id, session_id)
-        bot.reply_to(message, "Training complete!\nLet's /train again?",
-                     reply_markup=empty_markup)
+        bot.register_next_step_handler(
+            reply_message, get_train_step,
+            words=words, session_info=session_info, step=step+1, scores=scores
+        )
+    except Exception as e:
+        logging.error("getting train step failed", exc_info=e)
+
+
+def process_choose_hints(message, session_info, messages):
+    try:
+        if message.text == "/cancel":
+            bot.reply_to(message, "Cancelled training, come back soon and /train again!", reply_markup=empty_markup)
+            return
+        if message.text not in TRAIN_HINTS_OPTIONS:
+            bot.reply_to(message, "These hints are not supported. Try again /train",
+                        reply_markup=empty_markup)
+            return
+        
+        session_info["hints"] = message.text
+        session_info["session_id"] = get_new_session_id()
+        messages.append(message)
+        
+        init_training_session(pool, message.chat.id, session_info)
+        create_training_session(pool, message.chat.id, session_info) # TODO: another request for group training
+        words = get_training_words(pool, message.chat.id, session_info)
+        
+        if len(words) == 0:
+            bot.send_message(
+                message.chat.id,
+                "There are no words satisfying your parameters, try choosing something else: /train",
+                reply_markup=empty_markup
+            )
+            return
+        
+        bot.send_message(
+            message.chat.id,
+            "Starting training.\n" +
+            "Strategy: {}\nDuration: {}\nDirection: {}\nHints: {}".format(
+                session_info["strategy"], len(words),
+                session_info["direction"], session_info["hints"]
+            ),
+            reply_markup=empty_markup
+        )
+        if len(words) < session_info["duration"] and session_info["duration"] != TRAIN_MAX_N_WORDS:
+            bot.send_message(
+                message.chat.id,
+                "(I have found fewer words than you have requested)",
+                reply_markup=empty_markup
+            )
+        # delete all technical messages if training init is successful
+        for m in messages:
+            bot.delete_message(message.chat.id, m.id)
+        get_train_step(message=message, words=words, session_info=session_info, step=0, scores=[])
+    
+    except Exception as e:
+        logging.error("creating train session failed", exc_info=e)
+        return
 
 
 ##################

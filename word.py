@@ -34,9 +34,9 @@ def get_hint(info, order="from", hint="no hints"):
 
 def compare_user_input_with_db(user_input, db, order="from"):
     if order == "from":
-        return any(t == user_input.lower().strip() for t in json.loads(db["translation"])) * 1.0
+        return any(t == user_input.lower().strip() for t in json.loads(db["translation"]))
     elif order == "to":
-        return (user_input.lower().strip() == db["word"]) * 1.0
+        return (user_input.lower().strip() == db["word"])
 
 
 def calculate_score(word, order):
