@@ -14,7 +14,7 @@ WORDS_UPDATE_BUCKET_SIZE = 20
 GROUPS_UPDATE_BUCKET_SIZE = 20
 
 VOCABS_UPDATE_VALUES = "(CAST({} AS Uint64), '{}', CAST('{}' AS Utf8), " \
-                       "{}, {}, CAST({} AS Float), CAST({} AS Float), " \
+                       "{}, {}, CAST({} AS Uint64), CAST({} AS Uint64), " \
                        "CAST('{}' AS Utf8))"
 GROUP_UPDATE_VALUES = "(CAST({} AS Uint64), '{}', '{}', CAST('{}' AS Utf8))"
 
@@ -479,10 +479,6 @@ def update_final_scores(pool, chat_id, session_info):
                 $format_dttm(DateTime::FromSeconds(
                     CAST($session_id AS Uint32)
                 ))
-            );
-
-            $update_score = ($n_trains, $score_before, $current_score) -> (
-                (NVL($score_before * $n_trains, 0) + $current_score) / (NVL($n_trains, 0) + 1)
             );
 
             $current_words = (
