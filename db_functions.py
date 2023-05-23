@@ -147,6 +147,8 @@ def get_full_vocab(pool, chat_id, language):
                 word,
                 score_from,
                 score_to,
+                n_trains_from,
+                n_trains_to,
                 translation,
             FROM `{}`
             WHERE

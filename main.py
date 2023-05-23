@@ -8,7 +8,7 @@ from telebot import types
 import ydb
 
 from db_functions import *
-from word import compare_user_input_with_db, get_translation, get_word
+from word import compare_user_input_with_db, get_translation, get_word, get_overall_score, get_total_trains, format_word_for_listing
 
 
 bot = telebot.TeleBot(os.environ.get("BOT_TOKEN"))
@@ -37,6 +37,8 @@ TRAIN_HINTS_OPTIONS = ["no hints", "a****z", "test"]
 TRAIN_MAX_N_WORDS = 9999;
 TRAIN_CORRECT_ANSWER = "✅ㅤ" # invisible symbol to avoid large emoji
 TRAIN_WRONG_ANSWER = "❌ {}"
+SHOW_WORDS_SORT_OPTIONS = ["a-z", "z-a", "score ⬇️", "score ⬆️", "n trains ⬇️", "n trains ⬆️"] # TODO: added time
+
 
 ###################
 # Command handlers
@@ -80,10 +82,8 @@ def handle_set_language(message):
 
 
 def process_setting_language(message):
-    # user = get_user(message.chat.id)
     try:
         language = message.text.lower().strip()
-        # user.set_current_lang(language)
         update_current_lang(pool, message.chat.id, language)
         bot.reply_to(message, "Language set: {}.\nYou can /add_words to it or /train".format(language))
     except Exception as Argument:
@@ -180,9 +180,9 @@ def process_word_translation(message, language, words, translations):
                                            language=language, words=words, translations=translations)
     except Exception as e:
         logging.error("Word translating failed: {}".format(e))
-        
 
-# TODO: A request to the Telegram API was unsuccessful. Error code: 400. Description: Bad Request: message is too long
+
+# TODO: delete all unnecessary messages
 @bot.message_handler(commands=["show_words"])
 def handle_show_words(message):
     language = get_current_language(pool, message.chat.id)
@@ -190,23 +190,98 @@ def handle_show_words(message):
         handle_language_not_set(message)
         return
     try:
-        logging.debug("Showing all words, chat {}".format(message.chat.id))
         vocab = get_full_vocab(pool, message.chat.id, language)
-        vocab = sorted(vocab, key=lambda entry: entry["word"])
-        words = [
-            "{} - {}".format(
-                entry["word"],
-                " / ".join(json.loads(entry["translation"]))
-            ) for entry in vocab
-        ]
-        bot.reply_to(
-            message,
-            "Your words for {} language:\n\n".format(language) +
-            "\n".join(words)
+        for word in vocab:
+            word["score"] = get_overall_score(word)
+            word["n_trains"] = get_total_trains(word)
+        
+        # TODO: make all keyboards one time
+        markup = types.ReplyKeyboardMarkup(row_width=3, resize_keyboard=True, one_time_keyboard=True)
+        markup.add(*SHOW_WORDS_SORT_OPTIONS, row_width=2)
+        markup.add(telebot.types.KeyboardButton("/exit"))
+        
+        reply_message = bot.send_message(message.chat.id, "Choose sorting:", reply_markup=markup)
+        bot.register_next_step_handler(
+            reply_message, process_choose_word_sort,
+            words=vocab, original_command="/show_words"
         )
     except Exception as e:
-        logging.error("Word showing failed: {}".format(e))
-    
+        logging.error("Word showing failed", exc_info=e)
+
+
+def process_choose_word_sort(message, words, original_command):
+    try:
+        if message.text == "/exit":
+            bot.reply_to(message, "Exited!", reply_markup=empty_markup)
+            return
+        if message.text not in SHOW_WORDS_SORT_OPTIONS:
+            bot.reply_to(message, "This sorting is not supported. Try again {}".format(original_command), reply_markup=empty_markup)
+            return
+        
+        # TODO: get rid of string constants
+        if message.text == "a-z":
+            words = sorted(words, key=lambda w: w["word"])
+        elif message.text == "z-a":
+            words = sorted(words, key=lambda w: w["word"])[::-1]
+        elif message.text == "n trains ⬇️":
+            words = sorted(words, key=lambda w: w["n_trains"])[::-1]
+        elif message.text == "n trains ⬆️":
+            words = sorted(words, key=lambda w: w["n_trains"])
+        elif message.text == "score ⬇️":
+            unknown_score = list(filter(lambda w: w["score"] is None, words))
+            known_score = list(filter(lambda w: w["score"] is not None, words))
+            words = sorted(known_score, key=lambda w: w["score"])[::-1]
+            words.extend(unknown_score)
+        elif message.text == "score ⬆️":
+            unknown_score = list(filter(lambda w: w["score"] is None, words))
+            known_score = list(filter(lambda w: w["score"] is not None, words))
+            words = sorted(known_score, key=lambda w: w["score"])
+            words.extend(unknown_score)
+        
+        process_show_words_batch(message, words=words, batch_size=20, batch_number=0, original_command="/show_words")
+    except Exception as e:
+        logging.error("process_choose_word_sort failed", exc_info=e)
+
+
+def process_show_words_batch(message, words, batch_size, batch_number, original_command):
+    try:
+        if batch_number != 0:
+            if message.text == "/exit":
+                bot.send_message(message.chat.id, "Exited!", reply_markup=empty_markup)
+                return
+            if message.text != "/next":
+                bot.send_message(message.chat.id, "I don't know this command, try again {}".format(original_command),
+                                reply_markup=empty_markup)
+                return
+        
+        words_batch = words[batch_number * batch_size:(batch_number + 1) * batch_size]
+        words_formatted = [format_word_for_listing(word) for word in words_batch]
+        
+        if len(words_batch) == 0:
+            bot.send_message(message.chat.id, "This is all the words we have!",
+                            reply_markup=empty_markup)
+            return
+        
+        n_pages = len(words) // batch_size
+        if len(words) % batch_size > 0:
+            n_pages += 1
+            
+        markup = types.ReplyKeyboardMarkup(row_width=2, resize_keyboard=True, one_time_keyboard=True)
+        markup.add(*["/exit", "/next"], row_width=2)
+        
+        bot.send_message(
+            message.chat.id,
+            "Page {} of {}:\n\n{}".format(batch_number + 1, n_pages, "\n".join(words_formatted)),
+            reply_markup=markup
+        )
+        
+        bot.register_next_step_handler(
+            message, process_show_words_batch,
+            words=words, batch_size=batch_size, batch_number=batch_number+1, original_command=original_command
+        )
+    except Exception as e:
+        logging.error("showing word batch failed", exc_info=e)
+
 
 
 @bot.message_handler(commands=["show_languages"])

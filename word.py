@@ -1,6 +1,12 @@
 import json
 
 
+def ifnull(x, replace):
+    if x is None:
+        return replace
+    return x
+
+
 def get_translation_pretty(db):
     return "/".join(json.loads(db["translation"]))
 
@@ -39,6 +45,35 @@ def compare_user_input_with_db(user_input, db, order="from"):
         return (user_input.lower().strip() == db["word"])
 
 
-def calculate_score(word, order):
-    last_scores = word["history_" + order][-10:]
-    return sum(last_scores) / len(last_scores)
+def get_overall_score(db):
+    if db["score_to"] is None and db["score_from"] is None:
+        return None
+    
+    if db["score_to"] is None:
+        return db["score_from"] / db["n_trains_from"]
+    
+    if db["score_from"] is None:
+        return db["score_to"] / db["n_trains_to"]
+    
+    return 1 / 2 * db["score_from"] / db["n_trains_from"] + \
+        1 / 2 * db["score_to"] / db["n_trains_to"]
+
+
+def get_total_trains(db):
+    return ifnull(db["n_trains_from"], 0) + ifnull(db["n_trains_to"], 0)
+
+
+def format_word_for_listing(db):
+    if db["score"] is None:
+        return "????  {}  {} - {}".format(
+            db["n_trains"],
+            db["word"],
+            "/".join(json.loads(db["translation"]))
+        )
+    
+    return "{:.1f}%  {}  {} - {}".format(
+        db["score"] * 100,
+        db["n_trains"],
+        db["word"],
+        "/".join(json.loads(db["translation"]))
+    )
