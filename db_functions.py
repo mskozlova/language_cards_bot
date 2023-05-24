@@ -593,6 +593,8 @@ def get_group_contents(pool, group_id):
                 translation,
                 score_from,
                 score_to,
+                n_trains_from,
+                n_trains_to,
             FROM `{}` AS group_contents
             INNER JOIN `{}` AS vocabs ON
                 group_contents.chat_id == vocabs.chat_id

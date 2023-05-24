@@ -65,14 +65,14 @@ def get_total_trains(db):
 
 def format_word_for_listing(db):
     if db["score"] is None:
-        return "????  {}  {} - {}".format(
+        return "`???? {:>4}  {} - {}`".format(
             db["n_trains"],
             db["word"],
             "/".join(json.loads(db["translation"]))
         )
-    
-    return "{:.1f}%  {}  {} - {}".format(
-        db["score"] * 100,
+        
+    return "`{:>3}% {:>4}  {} - {}`".format(
+        int(db["score"] * 100),
         db["n_trains"],
         db["word"],
         "/".join(json.loads(db["translation"]))
