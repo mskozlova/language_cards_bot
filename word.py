@@ -63,15 +63,31 @@ def get_total_trains(db):
     return ifnull(db["n_trains_from"], 0) + ifnull(db["n_trains_to"], 0)
 
 
+def get_reaction_to_score(score):
+    if score is None:
+        return "🖤"
+    if score < 0.2:
+        return "💔"
+    if score < 0.5:
+        return "❤️"
+    if score < 0.7:
+        return "🧡"
+    if score < 0.85:
+        return "💛"
+    return "💚"
+
+
 def format_word_for_listing(db):
     if db["score"] is None:
-        return "`???? {:>4}  {} - {}`".format(
+        return "{}` ???? {:>4}  {} - {}`".format(
+            get_reaction_to_score(db["score"]),
             db["n_trains"],
             db["word"],
             "/".join(json.loads(db["translation"]))
         )
         
-    return "`{:>3}% {:>4}  {} - {}`".format(
+    return "{}` {:>3}% {:>4}  {} - {}`".format(
+        get_reaction_to_score(db["score"]),
         int(db["score"] * 100),
         db["n_trains"],
         db["word"],
