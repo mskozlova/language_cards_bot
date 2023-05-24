@@ -271,8 +271,8 @@ def process_show_words_batch(message, words, batch_size, batch_number, original_
         
         bot.send_message(
             message.chat.id,
-            "Page {} of {}:\n\n{}".format(batch_number + 1, n_pages, "\n".join(words_formatted)),
-            reply_markup=markup
+            "Page {} of {}:\n\n`   %    #  word`\n{}".format(batch_number + 1, n_pages, "\n".join(words_formatted)),
+            reply_markup=markup, parse_mode="MarkdownV2"
         )
         
         bot.register_next_step_handler(
@@ -447,26 +447,17 @@ def process_show_group(message, language):
             return
         
         group_id = groups[0]["group_id"].decode("utf-8")
-        group_contents = get_group_contents(pool, group_id)
+        group_contents = sorted(get_group_contents(pool, group_id), key=lambda w: w["word"])
+        for word in group_contents:
+            word["score"] = get_overall_score(word)
+            word["n_trains"] = get_total_trains(word)
         
         if len(group_contents) == 0:
             bot.reply_to(message, "This group has no words in it yet, try /group_add_words",
                          reply_markup=empty_markup)
             return
         
-        words = [
-            "{} - {}".format(
-                entry["word"],
-                " / ".join(json.loads(entry["translation"]))
-            ) for entry in group_contents
-        ]
-        bot.reply_to(
-            message,
-            "Your words for {} language, group {}:\n\n".format(language, message.text) +
-            "\n".join(words),
-            reply_markup=empty_markup
-        )
-    
+        process_show_words_batch(message, group_contents, batch_size=20, batch_number=0, original_command="/show_groups")
     except Exception as e:
         logging.error("showing words of group failed", exc_info=e)
     
