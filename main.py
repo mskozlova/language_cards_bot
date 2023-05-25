@@ -271,7 +271,7 @@ def process_show_words_batch(message, words, batch_size, batch_number, original_
         
         bot.send_message(
             message.chat.id,
-            "Page {} of {}:\n\n`   %    #  word`\n{}".format(batch_number + 1, n_pages, "\n".join(words_formatted)),
+            "Page {} of {}:\n\n🤍`    %    #  word`\n{}".format(batch_number + 1, n_pages, "\n".join(words_formatted)),
             reply_markup=markup, parse_mode="MarkdownV2"
         )
         
