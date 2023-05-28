@@ -15,7 +15,7 @@ GROUPS_UPDATE_BUCKET_SIZE = 20
 
 VOCABS_UPDATE_VALUES = "(CAST({} AS Uint64), '{}', CAST('{}' AS Utf8), " \
                        "{}, {}, CAST({} AS Uint64), CAST({} AS Uint64), " \
-                       "CAST('{}' AS Utf8))"
+                       "CAST('{}' AS Utf8), CAST({} AS Uint64))"
 GROUP_UPDATE_VALUES = "(CAST({} AS Uint64), '{}', '{}', CAST('{}' AS Utf8))"
 
 
@@ -73,7 +73,7 @@ def bulk_update_words(pool, values):
         session.transaction().execute(
             """
             UPSERT INTO `{}` (chat_id, language, word, last_train_from, last_train_to, 
-                score_from, score_to, translation) VALUES
+                score_from, score_to, translation, added_timestamp) VALUES
                 {};
             """.format(
                 VOCABS_TABLE_PATH, values
@@ -92,7 +92,8 @@ def prepare_vocabs_data(chat_id, language, words):
                 chat_id, language, word,
                 "NULL", "NULL",
                 "NULL", "NULL",
-                translation
+                translation,
+                int(datetime.datetime.timestamp(datetime.datetime.now()))
             )
         ))
     return data_list
@@ -150,6 +151,7 @@ def get_full_vocab(pool, chat_id, language):
                 n_trains_from,
                 n_trains_to,
                 translation,
+                added_timestamp,
             FROM `{}`
             WHERE
                 chat_id == {}
@@ -595,6 +597,7 @@ def get_group_contents(pool, group_id):
                 score_to,
                 n_trains_from,
                 n_trains_to,
+                added_timestamp,
             FROM `{}` AS group_contents
             INNER JOIN `{}` AS vocabs ON
                 group_contents.chat_id == vocabs.chat_id

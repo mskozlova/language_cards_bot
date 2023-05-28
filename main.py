@@ -37,7 +37,11 @@ TRAIN_HINTS_OPTIONS = ["no hints", "a****z", "test"]
 TRAIN_MAX_N_WORDS = 9999;
 TRAIN_CORRECT_ANSWER = "✅ㅤ" # invisible symbol to avoid large emoji
 TRAIN_WRONG_ANSWER = "❌ {}"
-SHOW_WORDS_SORT_OPTIONS = ["a-z", "z-a", "score ⬇️", "score ⬆️", "n trains ⬇️", "n trains ⬆️"] # TODO: added time
+SHOW_WORDS_SORT_OPTIONS = [
+    "a-z", "z-a", "score ⬇️", "score ⬆️",
+    "n trains ⬇️", "n trains ⬆️", "time added ⬇️", "time added ⬆️"
+]
+GROUP_ADD_WORDS_SORT_OPTIONS = ["a-z", "time added ⬇️"]
 
 
 ###################
@@ -227,6 +231,10 @@ def process_choose_word_sort(message, words, original_command):
             words = sorted(words, key=lambda w: w["n_trains"])[::-1]
         elif message.text == "n trains ⬆️":
             words = sorted(words, key=lambda w: w["n_trains"])
+        elif message.text == "time added ⬇️":
+            words = sorted(words, key=lambda w: w["added_timestamp"])[::-1]
+        elif message.text == "time added ⬆️":
+            words = sorted(words, key=lambda w: w["added_timestamp"])
         elif message.text == "score ⬇️":
             unknown_score = list(filter(lambda w: w["score"] is None, words))
             known_score = list(filter(lambda w: w["score"] is not None, words))
@@ -333,6 +341,7 @@ def handle_show_current_languages(message):
 #         bot.reply_to(message, "You don't have language {}.".format(language))
 
 
+# TODO: delete words from groups too
 @bot.message_handler(commands=["delete_words"])
 def handle_delete_words(message):
     language = get_current_language(pool, message.chat.id)
@@ -587,21 +596,50 @@ def process_choose_group_to_add_words(message, language):
         for entry in vocabulary:
             if entry["word"] in words_in_group:
                 continue
-            words_to_add.append(
-                "{} - {}".format(
-                    entry["word"],
-                    " / ".join(json.loads(entry["translation"]))
-                )
-            )
+            words_to_add.append(entry)
+
         
         if len(words_to_add) == 0:
             bot.reply_to(message, "There're no more words to add to this group.")
             return
+        
+        markup = types.ReplyKeyboardMarkup(row_width=4, one_time_keyboard=True, resize_keyboard=True)
+        markup.add(*GROUP_ADD_WORDS_SORT_OPTIONS, row_width=4)
+        markup.add(telebot.types.KeyboardButton("/exit"))
+        
+        reply_message = bot.send_message(message.chat.id, "Choosing sorting:", reply_markup=markup)
+        bot.register_next_step_handler(reply_message, process_choose_sorting_to_add_words, language=language,
+                                       group_id=group_id, group_name=group_name, vocabulary=words_to_add)
+    except Exception as e:
+        logging.error("group adding words failed", exc_info=e)
+        
+
+def process_choose_sorting_to_add_words(message, language, group_id, group_name, vocabulary):
+    try:
+        if message.text == "/exit":
+            bot.reply_to(message, "Exited!", reply_markup=empty_markup)
+            return
+        
+        if message.text not in GROUP_ADD_WORDS_SORT_OPTIONS:
+            bot.reply_to(message, "This sorting is not supported, try again /group_add_words", reply_markup=empty_markup)
+            return
+        
+        if message.text == "a-z":
+            vocabulary = sorted(vocabulary, key=lambda x: x["word"])
+        elif message.text == "time added ⬇️":
+            vocabulary = sorted(vocabulary, key=lambda x: x["added_timestamp"])[::-1]
+        
+        words_to_add = [
+            "{} - {}".format(
+                entry["word"],
+                " / ".join(json.loads(entry["translation"]))
+            ) for entry in vocabulary
+        ]     
         process_words_batch(message, language=language, group_id=group_id, group_name=group_name,
                             all_words=words_to_add, current_words=None,
                             batch_num=0, batch_size=9, is_start=True)
     except Exception as e:
-        logging.error("group adding words failed", exc_info=e)
+        logging.error("choose sorting for group word addition failed", exc_info=e)
 
 
 @bot.message_handler(commands=["train"])
