@@ -502,8 +502,8 @@ def update_final_scores(pool, chat_id, session_info):
                     IF($order == "from", $get_dttm($session_id), v.last_train_from) AS last_train_from,
                     IF($order == "to", NVL(v.n_trains_to, 0) + 1, v.n_trains_to) AS n_trains_to,
                     IF($order == "from", NVL(v.n_trains_from, 0) + 1, v.n_trains_from) AS n_trains_from,
-                    IF($order == "to", NVL(v.score_to, 0) + 1, v.score_to) AS score_to,
-                    IF($order == "from", NVL(v.score_from, 0) + 1, v.score_from) AS score_from,
+                    IF($order == "to", NVL(v.score_to, 0) + cw.score, v.score_to) AS score_to,
+                    IF($order == "from", NVL(v.score_from, 0) + cw.score, v.score_from) AS score_from,
                 WITHOUT
                     v.last_train_from,
                     v.last_train_to,

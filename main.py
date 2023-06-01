@@ -9,6 +9,7 @@ import ydb
 
 from db_functions import *
 from word import compare_user_input_with_db, get_translation, get_word, get_overall_score, get_total_trains, format_word_for_listing
+from word import format_word_for_group_addition, get_word_from_group_addition
 
 
 bot = telebot.TeleBot(os.environ.get("BOT_TOKEN"))
@@ -42,7 +43,10 @@ SHOW_WORDS_SORT_OPTIONS = [
     "n trains ⬇️", "n trains ⬆️", "time added ⬇️", "time added ⬆️"
 ]
 GROUP_ADD_WORDS_SORT_OPTIONS = ["a-z", "time added ⬇️"]
-
+GROUP_ADD_WORDS_PREFIXES = {
+    0: "🖤",
+    1: "💚",
+}
 
 ###################
 # Command handlers
@@ -481,55 +485,79 @@ def handle_group_add_words(message):
         logging.error("showing groups to add words to failed", exc_info=e)
 
 
-def get_keyboard_markup(choices, additional_commands=[], row_width=3):
+def get_keyboard_markup(choices, mask, additional_commands=[], row_width=2):
     markup = types.ReplyKeyboardMarkup(row_width=row_width, resize_keyboard=True)
-    if len(choices) % row_width != 0:
-        choices.extend([""] * (row_width - len(choices) % row_width))
-    markup.add(*choices, row_width=row_width)
-    markup.add(*additional_commands, row_width=row_width)
+        
+    formatted_choices = [
+        "{}{}".format(
+            GROUP_ADD_WORDS_PREFIXES[mask],
+            format_word_for_group_addition(entry),
+        ) for entry, mask in zip(choices, mask)
+    ]
+    if len(formatted_choices) % row_width != 0:
+        formatted_choices.extend([""] * (row_width - len(formatted_choices) % row_width)) 
+    
+    markup.add(*formatted_choices, row_width=row_width)
+    markup.add(*additional_commands, row_width=len(additional_commands))
     return markup
 
 
 def save_words_to_group(chat_id, language, group_id, words):
-    original_words = [word.split(" - ")[0] for word in words]
-    logging.debug(",".join(original_words))
-    add_words_to_group(pool, chat_id, language, group_id, original_words)
+    logging.debug(",".join(words))
+    
+    if len(words) > 0:
+        add_words_to_group(pool, chat_id, language, group_id, words)
+    
+    return len(words)
 
 
-# TODO: do not delete used words, but change the to blank buttons
 def process_words_batch(message, language, group_id, group_name, all_words, current_words,
-                        batch_num, batch_size, is_start=False, chosen_words=set()):
+                        batch_num, batch_size, ok_message=None, chosen_words=set(), is_start=False):
     try:
-        logging.debug("process_words_batch: message={}, batch_num={}, chosen_words={}".format(
+        logging.debug("process_words_batch: message={}, batch_num={}".format(
             message.text,
             batch_num,
-            ",".join(chosen_words)
         ))
+        n_batches = len(all_words) // batch_size
+        if len(all_words) % batch_size > 0:
+            n_batches += 1
+        
+        if ok_message is not None:
+            bot.delete_message(ok_message.chat.id, ok_message.id)
+        
+        batch = all_words[batch_num * batch_size:(batch_num + 1) * batch_size]
+        
         if is_start: # new page
+            current_words = {
+                entry["word"]: 0 for entry in batch
+            }
             markup = get_keyboard_markup(
-                all_words[batch_num * batch_size:(batch_num + 1) * batch_size],
+                batch,
+                current_words.values(),
                 ["/cancel", "/exit", "/next"]
-            )
-            current_words = set(
-                all_words[batch_num * batch_size:(batch_num + 1) * batch_size]
             )
             message = bot.send_message(
                 message.chat.id,
                 "Choose words for group {}, page {} out of {}".format(
                     group_name,
                     batch_num + 1,
-                    len(all_words) // batch_size
+                    n_batches
                 ),
                 reply_markup=markup
             )
-            bot.register_next_step_handler(message, process_words_batch,
-                                        language=language, group_id=group_id, group_name=group_name,
-                                        all_words=all_words, current_words=current_words,
-                                        batch_num=batch_num, batch_size=batch_size, chosen_words=chosen_words)
+            bot.register_next_step_handler(
+                message, process_words_batch,
+                language=language, group_id=group_id, group_name=group_name,
+                all_words=all_words, current_words=current_words,
+                batch_num=batch_num, batch_size=batch_size
+            )
         elif message.text == "/exit":
-            if len(chosen_words) > 0:
-                save_words_to_group(message.chat.id, language, group_id, chosen_words)
-            bot.reply_to(message, "Finished! Saved {} words to {} group".format(len(chosen_words), group_name),
+            logging.debug("prepare to exit group add words")
+            for word, mask in current_words.items():
+                if mask == 1:
+                    chosen_words.add(word)
+            n_saved_words = save_words_to_group(message.chat.id, language, group_id, chosen_words)
+            bot.reply_to(message, "Finished! Saved {} words to {} group".format(n_saved_words, group_name),
                         reply_markup=empty_markup)
             return
         elif message.text == "/cancel":
@@ -537,33 +565,47 @@ def process_words_batch(message, language, group_id, group_name, all_words, curr
             return
         elif message.text == "/next":
             batch_num += 1
+            
+            for word, mask in current_words.items():
+                if mask == 1:
+                    chosen_words.add(word)
+
             if batch_num * batch_size >= len(all_words):
-                if len(chosen_words) > 0:
-                    save_words_to_group(message.chat.id, language, group_id, chosen_words)
+                n_saved_words = save_words_to_group(message.chat.id, language, group_id, chosen_words)
                 bot.reply_to(
                     message,
-                    "That's all the words we have! Saved {} words to {} group".format(len(chosen_words), group_name),
+                    "That's all the words we have! Saved {} words to {} group".format(n_saved_words, group_name),
                     reply_markup=empty_markup
                 )
                 return
             
             process_words_batch(message, language=language, group_id=group_id, group_name=group_name,
                                 all_words=all_words,
-                                current_words=None, batch_num=batch_num, batch_size=batch_size,
-                                is_start=True, chosen_words=chosen_words)
+                                current_words=None, batch_num=batch_num, batch_size=batch_size, chosen_words=chosen_words,
+                                is_start=True)
 
-        elif message.text in current_words:
-            chosen_words.add(message.text)
-            bot.register_next_step_handler(message, process_words_batch,
-                                        language=language, group_id=group_id, group_name=group_name,
-                                        all_words=all_words, current_words=current_words,
-                                        batch_num=batch_num, batch_size=batch_size, chosen_words=chosen_words)
+        elif get_word_from_group_addition(message.text[1:]) in current_words:
+            word = get_word_from_group_addition(message.text[1:])
+            current_words[word] = (current_words[word] + 1) % 2
+            markup = get_keyboard_markup(
+                batch,
+                current_words.values(),
+                ["/cancel", "/exit", "/next"]
+            )
+            ok_message = bot.send_message(message.chat.id, "Ok!", reply_markup=markup)
+            bot.register_next_step_handler(
+                message, process_words_batch,
+                language=language, group_id=group_id, group_name=group_name,
+                all_words=all_words, current_words=current_words,
+                batch_num=batch_num, batch_size=batch_size, ok_message=ok_message
+            )
+            bot.delete_message(message.chat.id, message.id)
         else:
             bot.reply_to(message, "Not a word from the list, ignoring that.")
             bot.register_next_step_handler(message, process_words_batch,
                                         language=language, group_id=group_id, group_name=group_name,
                                         all_words=all_words, current_words=current_words,
-                                        batch_num=batch_num, batch_size=batch_size, chosen_words=chosen_words)
+                                        batch_num=batch_num, batch_size=batch_size)
     except Exception as e:
         logging.error("word batch failed", exc_info=e)
 
@@ -625,19 +667,19 @@ def process_choose_sorting_to_add_words(message, language, group_id, group_name,
             return
         
         if message.text == "a-z":
-            vocabulary = sorted(vocabulary, key=lambda x: x["word"])
+            vocabulary = sorted(vocabulary, key=lambda x: x["translation"])
         elif message.text == "time added ⬇️":
             vocabulary = sorted(vocabulary, key=lambda x: x["added_timestamp"])[::-1]
         
-        words_to_add = [
-            "{} - {}".format(
-                entry["word"],
-                " / ".join(json.loads(entry["translation"]))
-            ) for entry in vocabulary
-        ]     
+        # words_to_add = [
+        #     "{} - {}".format(
+        #         json.loads(entry["translation"])[0],
+        #         entry["word"]
+        #     ) for entry in vocabulary
+        # ]     
         process_words_batch(message, language=language, group_id=group_id, group_name=group_name,
-                            all_words=words_to_add, current_words=None,
-                            batch_num=0, batch_size=9, is_start=True)
+                            all_words=vocabulary, current_words=None,
+                            batch_num=0, batch_size=10, is_start=True)
     except Exception as e:
         logging.error("choose sorting for group word addition failed", exc_info=e)
 

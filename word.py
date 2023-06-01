@@ -93,3 +93,11 @@ def format_word_for_listing(db):
         db["word"],
         "/".join(json.loads(db["translation"]))
     )
+
+
+def format_word_for_group_addition(db):
+    return "{} - {}".format(json.loads(db["translation"])[0], db["word"])
+
+
+def get_word_from_group_addition(word):
+    return word.split(" - ")[1]
