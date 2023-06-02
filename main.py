@@ -47,6 +47,10 @@ GROUP_ADD_WORDS_PREFIXES = {
     0: "🖤",
     1: "💚",
 }
+GROUP_DELETE_ARE_YOU_SURE = {
+    "Yes!": True,
+    "No..": False,
+}
 
 ###################
 # Command handlers
@@ -64,6 +68,7 @@ def handle_help(message):
                      "- /show_words to print out all words you saved for current language.\n"
                      "- /delete_words to delete some words from current vocabulary.\n"
                      "- /create_group to create new group for words.\n"
+                     "- /delete_group to delete one of your groups.\n"
                      "- /show_groups to show your existing groups for current language.\n"
                      "- /group_add_words to add some words from you vocabulary to one of your groups.\n"
                      "- /group_delete_words to delete some words from one of your groups.\n"
@@ -417,6 +422,7 @@ def process_group_creation(message, language):
 
 
 def process_show_groups(message, language):
+    # TODO: handle large number of groups
     groups = get_all_groups(pool, message.chat.id, language)
     
     if len(groups) == 0:
@@ -433,7 +439,75 @@ def process_show_groups(message, language):
         reply_markup=markup
     )
     return reply_message
+
+
+@bot.message_handler(commands=["delete_group"])
+def handle_delete_group(message):
+    current_language = get_current_language(pool, message.chat.id)
+    if current_language is None:
+        handle_language_not_set(message)
+        return
+    try:
+        reply_message = process_show_groups(message, current_language)
+        bot.register_next_step_handler(reply_message, process_group_deletion_check_sure, language=current_language)
+    except Exception as e:
+        logging.exception("starting creating group failed", exc_info=e)
+
+
+def process_group_deletion_check_sure(message, language):
+    try:
+        if message.text == "/exit":
+            bot.reply_to(message, "Exited!", reply_markup=empty_markup)
+            return
         
+        groups = get_group_by_name(pool, message.chat.id, language, message.text)
+        
+        if len(groups) == 0:
+            bot.reply_to(message, "You don't have a group with that name, try again /show_groups",
+                         reply_markup=empty_markup)
+            return
+        
+        if not groups[0]["is_creator"]:
+            bot.reply_to(message, "You are not a creator of this group, can't edit or delete it.",
+                         reply_markup=empty_markup)
+            return
+        
+        group_id = groups[0]["group_id"].decode("utf-8")
+        group_name = groups[0]["group_name"].decode("utf-8")
+        
+        markup = types.ReplyKeyboardMarkup(row_width=len(GROUP_DELETE_ARE_YOU_SURE), resize_keyboard=True, one_time_keyboard=True)
+        markup.add(*GROUP_DELETE_ARE_YOU_SURE.keys(), row_width=len(GROUP_DELETE_ARE_YOU_SURE))
+        bot.send_message(
+            message.chat.id,
+            "Are you sure you want to delete group '{}' for language {}?\nThis will NOT affect words in your vocabulary!".format(group_name, language),
+            reply_markup=markup
+        )
+        # TODO: maybe delete words, too?
+        bot.register_next_step_handler(message, process_group_deletion, language=language, group_id=group_id, group_name=group_name, is_creator=groups[0]["is_creator"])
+    except Exception as e:
+        logging.exception("creating group failed", exc_info=e)
+
+
+def process_group_deletion(message, language, group_id, group_name, is_creator):
+    try:
+        # TODO: when sharing think of local / global deletions (use is_creator)
+        if message.text not in GROUP_DELETE_ARE_YOU_SURE:
+            bot.reply_to(message, "Unknown command, please try again: /delete_group",
+                        reply_markup=empty_markup)
+            return
+        
+        if not GROUP_DELETE_ARE_YOU_SURE[message.text]:
+            bot.send_message(
+                message.chat.id, "Cancelled group deletion!",
+                reply_markup=empty_markup
+            )
+            return
+        
+        delete_group(pool, group_id)
+        bot.send_message(message.chat.id, "Group '{}' successfully deleted! /show_groups".format(group_name))
+    except Exception as e:
+        logging.error("process_group_deletion failed", exc_info=e)
+
 
 @bot.message_handler(commands=["show_groups"])
 def handle_show_groups(message):
@@ -640,7 +714,7 @@ def process_choose_group_to_add_words(message, language):
             return
         
         if not groups[0]["is_creator"]:
-            bot.reply_to(message, "You are not a creator of this group, can't edit it.",
+            bot.reply_to(message, "You are not a creator of this group, can't edit or delete it.",
                          reply_markup=empty_markup)
             return
         
@@ -720,7 +794,7 @@ def process_choose_group_to_delete_words(message, language):
             return
         
         if not groups[0]["is_creator"]:
-            bot.reply_to(message, "You are not a creator of this group, can't edit it.",
+            bot.reply_to(message, "You are not a creator of this group, can't edit or delete it.",
                          reply_markup=empty_markup)
             return
         

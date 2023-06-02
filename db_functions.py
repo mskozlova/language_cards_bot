@@ -318,6 +318,7 @@ def get_session_info(pool, chat_id, session_id):
 
     return pool.retry_operation_sync(callee)
 
+
 def create_training_session(pool, chat_id, session_info):
     def callee(session):
         session.transaction().execute(
@@ -561,6 +562,26 @@ def add_group(pool, chat_id, language, group_name, group_id, is_creator):
             """.format(
                 GROUPS_TABLE_PATH, chat_id, language,
                 group_id, group_name, is_creator
+            ),
+            commit_tx=True,
+        )
+
+    return pool.retry_operation_sync(callee)
+
+
+def delete_group(pool, group_id):
+    def callee(session):
+        session.transaction().execute(
+            """
+            $group_id = '{}';
+            
+            DELETE FROM `{}`
+            WHERE group_id == $group_id;
+            
+            DELETE FROM `{}`
+            WHERE group_id == $group_id;
+            """.format(
+                group_id, GROUPS_CONTENTS_TABLE_PATH, GROUPS_TABLE_PATH
             ),
             commit_tx=True,
         )
