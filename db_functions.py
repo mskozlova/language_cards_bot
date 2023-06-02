@@ -630,6 +630,25 @@ def bulk_update_group(pool, values):
     return pool.retry_operation_sync(callee)
 
 
+def bulk_update_group_delete(pool, chat_id, language, group_id, words):
+    def callee(session):
+        session.transaction().execute(
+            """
+            DELETE FROM `{}`
+            WHERE
+                chat_id == {}
+                AND language == '{}'
+                AND group_id == '{}'
+                AND word IN ({});
+            """.format(
+                GROUPS_CONTENTS_TABLE_PATH, chat_id, language, group_id, words
+            ),
+            commit_tx=True,
+        )
+
+    return pool.retry_operation_sync(callee)
+
+
 def prepare_groups_data(chat_id, language, group_id, words):
     data_list = []
     for word in words:
@@ -645,3 +664,12 @@ def add_words_to_group(pool, chat_id, language, group_id, words):
     data = prepare_groups_data(chat_id, language, group_id, words)
     for i in range(0, len(data), GROUPS_UPDATE_BUCKET_SIZE):
         bulk_update_group(pool, ",\n".join(data[i:i+GROUPS_UPDATE_BUCKET_SIZE]))
+
+
+def delete_words_from_group(pool, chat_id, language, group_id, words):
+    words_list = list(words)
+    for i in range(0, len(words_list), GROUPS_UPDATE_BUCKET_SIZE):
+        bulk_update_group_delete(
+            pool, chat_id, language, group_id,
+            ", ".join(["'{}'".format(word) for word in words_list[i:i+GROUPS_UPDATE_BUCKET_SIZE]])
+        )

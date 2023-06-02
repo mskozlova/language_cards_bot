@@ -95,9 +95,9 @@ def format_word_for_listing(db):
     )
 
 
-def format_word_for_group_addition(db):
+def format_word_for_group_action(db):
     return "{} - {}".format(json.loads(db["translation"])[0], db["word"])
 
 
-def get_word_from_group_addition(word):
+def get_word_from_group_action(word):
     return word.split(" - ")[1]
