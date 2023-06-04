@@ -57,6 +57,7 @@ GROUP_DELETE_ARE_YOU_SURE = {
 ###################
 @bot.message_handler(commands=["help", "start"])
 def handle_help(message):
+    logging.debug("{} initiated from chat_id {}".format(message.text, message.chat.id))
     bot.send_message(message.chat.id,
                      "Ahoy, sexy! I am a cute little bot for remembering "
                      "words you've learned during your language course. Here's how you can use me:\n\n"
@@ -1007,10 +1008,12 @@ def get_train_step(message, words, session_info, step, scores):
         if step == len(words): # training complete
             # TODO: different messages for different results
             if session_info["hints"] == "no hints":
+                logging.debug("setting training session scores for chat_id {}, scores: {}".format(message.chat.id, scores))
                 set_training_scores(
                     pool, message.chat.id, session_info["session_id"],
                     list(range(1, len(words) + 1)), scores
                 )
+                logging.debug("updating final scores")
                 update_final_scores(pool, message.chat.id, session_info)
             else:
                 bot.send_message(
@@ -1061,6 +1064,7 @@ def process_choose_hints(message, session_info, messages):
         messages.append(message)
         
         init_training_session(pool, message.chat.id, session_info)
+        logging.debug("initiating train session for chat_id {}".format(message.chat.id))
         if session_info["strategy"] != "group":
             create_training_session(pool, message.chat.id, session_info)
         else:
