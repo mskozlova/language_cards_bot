@@ -171,6 +171,13 @@ def delete_language(pool, chat_id, language):
                     AND language == $language
                     AND is_creator
             );
+            $sessions = (
+                SELECT session_id
+                FROM `{}`
+                WHERE
+                    chat_id == $chat_id
+                    AND language == $language
+            );
             
             DELETE FROM `{}`
             WHERE
@@ -179,7 +186,7 @@ def delete_language(pool, chat_id, language):
                 
             UPDATE `{}`
             SET current_lang = NULL
-            WHERE chat_id == {};
+            WHERE chat_id == $chat_id;
             
             DELETE FROM `{}`
             WHERE
@@ -194,7 +201,7 @@ def delete_language(pool, chat_id, language):
             DELETE FROM `{}`
             WHERE
                 chat_id == $chat_id
-                AND language == $language;
+                AND session_id IN $sessions;
             
             DELETE FROM `{}`
             WHERE
@@ -212,7 +219,7 @@ def delete_language(pool, chat_id, language):
                 )
                 OR group_id IN $groups;
             """.format(
-                chat_id, language, GROUPS_TABLE_PATH,
+                chat_id, language, GROUPS_TABLE_PATH, TRAINING_SESSIONS_INFO_TABLE_PATH,
                 VOCABS_TABLE_PATH, USERS_TABLE_PATH, LANGUAGES_TABLE_PATH,
                 TRAINING_SESSIONS_INFO_TABLE_PATH, TRAINING_SESSIONS_TABLE_PATH,
                 GROUPS_TABLE_PATH, GROUPS_CONTENTS_TABLE_PATH

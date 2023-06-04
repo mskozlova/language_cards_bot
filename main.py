@@ -384,28 +384,34 @@ def handle_show_current_languages(message):
 
 @bot.message_handler(commands=["delete_language"])
 def handle_delete_language(message):
-    language = get_current_language(pool, message.chat.id)
-    if language is None:
-        handle_language_not_set(message)
-        return
-    
-    markup = types.ReplyKeyboardMarkup(row_width=len(DELETE_ARE_YOU_SURE), resize_keyboard=True, one_time_keyboard=True)
-    markup.add(*DELETE_ARE_YOU_SURE.keys(), row_width=len(DELETE_ARE_YOU_SURE))
-    bot.send_message(
-        message.chat.id,
-        "You are trying to delete language {}\n\n".format(language) +
-        "All your words, training sessions and groups for this language will be deleted without any possibility of recovery.\n\n"
-        "Are you sure you want to delete language?",
-        reply_markup=markup
-    )
-    bot.register_next_step_handler(message, process_delete_language, language=language)
+    try:
+        language = get_current_language(pool, message.chat.id)
+        if language is None:
+            handle_language_not_set(message)
+            return
+        
+        markup = types.ReplyKeyboardMarkup(row_width=len(DELETE_ARE_YOU_SURE), resize_keyboard=True, one_time_keyboard=True)
+        markup.add(*DELETE_ARE_YOU_SURE.keys(), row_width=len(DELETE_ARE_YOU_SURE))
+        bot.send_message(
+            message.chat.id,
+            "You are trying to delete language {}\n\n".format(language) +
+            "All your words, training sessions and groups for this language will be deleted without any possibility of recovery.\n\n"
+            "Are you sure you want to delete language?",
+            reply_markup=markup
+        )
+        bot.register_next_step_handler(message, process_delete_language, language=language)
+    except Exception as e:
+        logging.error("handle_delete_language failed", exc_info=e)
 
 
 def process_delete_language(message, language):
-    delete_language(pool, message.chat.id, language)
-    bot.send_message(message.chat.id,
-                     "Language {} is deleted.\n".format(language) +
-                     "Check /show_languages to make sure. Use /set_language to set a new language")
+    try:
+        delete_language(pool, message.chat.id, language)
+        bot.send_message(message.chat.id,
+                        "Language {} is deleted.\n".format(language) +
+                        "Check /show_languages to make sure. Use /set_language to set a new language")
+    except Exception as e:
+        logging.error("process_delete_language failed", exc_info=e)
 
 
 # TODO: delete words from groups too
