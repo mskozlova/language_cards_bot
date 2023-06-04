@@ -67,6 +67,7 @@ def handle_help(message):
                         "- /help or /start to read this message again.\n"
                         "- /set_language to set current vocabulary "
                         "(you can add multiple and switch between them without erasing the progress).\n"
+                        "- /delete_language to delete current language with all data on words, groups, training sessions.\n"
                         "- /show_languages to see the list of your languages.\n"
                         "- /add_words to add words to current vocabulary.\n"
                         "- /show_words to print out all words you saved for current language.\n"
@@ -79,7 +80,6 @@ def handle_help(message):
                         "- /train to choose training strategy and start training.\n"
                         "- /stop to stop training session without saving the results.\n"
                         "- /forget_me to delete all the information I have about you: languages, words, groups, etc.")
-                        # TODO: /delete_language)
     except Exception as e:
         logging.error("help failed", exc_info=e)
 
@@ -104,28 +104,50 @@ def process_forget_me(message):
                      "Check /show_languages to make sure you're all cleaned up.")
 
 
+# TODO: language does not exist without words in it
 @bot.message_handler(commands=["set_language"])
 def handle_set_language(message):
     try:
-        reply_message = bot.reply_to(message, "Write language code.")
-        bot.register_next_step_handler(reply_message, process_setting_language)
-    except Exception as Argument:
-        logging.exception("setting language failed")
+        language = get_current_language(pool, message.chat.id)
+        if language is not None:
+            bot.send_message(message.chat.id, "Your current language is {}.".format(language))
+        
+        languages = get_available_languages(pool, message.chat.id)
+        
+        if len(languages) == 0:
+            bot.send_message(message.chat.id, "You don't have any languages yet. Write name of a new language to create:")
+        else:
+            markup = types.ReplyKeyboardMarkup(row_width=3, resize_keyboard=True, one_time_keyboard=True)
+            markup.add(*languages, row_width=3)
+            markup.add(*["/cancel"])
+            bot.send_message(message.chat.id, "Choose one of your existent languages or type a name for a new one:", reply_markup=markup)
+        
+        bot.register_next_step_handler(message, process_setting_language, languages=set(languages))
+    except Exception as e:
+        logging.exception("setting language failed", exc_info=e)
 
 
-def process_setting_language(message):
+def process_setting_language(message, languages):
     try:
+        if message.text == "/cancel":
+            bot.send_message(message.chat.id, "Cancelled setting language!", reply_markup=empty_markup)
+            return
+        
         language = message.text.lower().strip()
         user_info = get_user_info(pool, message.chat.id)
         
         if len(user_info) == 0: # new user!
-            bot.send_message(message.chat.id, "Hey! I can see you are new here. Welcome!".format(language))
+            bot.send_message(message.chat.id, "Hey! I can see you are new here. Welcome!".format(language), reply_markup=empty_markup)
             create_user(pool, message.chat.id)
+            
+        if language not in languages:
+            bot.send_message(message.chat.id, "You've created a new language {}.".format(language), reply_markup=empty_markup)
+            user_add_language(pool, message.chat.id, language)
         
         update_current_lang(pool, message.chat.id, language)
-        bot.send_message(message.chat.id, "Language set: {}.\nYou can /add_words to it or /train".format(language))
-    except Exception as Argument:
-        logging.exception("processing setting language failed")
+        bot.send_message(message.chat.id, "Language set: {}.\nYou can /add_words to it or /train".format(language), reply_markup=empty_markup)
+    except Exception as e:
+        logging.exception("processing setting language failed", exc_info=e)
 
 
 def handle_language_not_set(message):
@@ -325,23 +347,27 @@ def process_show_words_batch(message, words, batch_size, batch_number, original_
 
 
 
+# TODO: delete this command
 @bot.message_handler(commands=["show_languages"])
 def handle_show_languages(message):
-    languages = get_available_languages(pool, message.chat.id)
-    if len(languages) == 0:
-        bot.reply_to(message, "You don't have any languages. Use /set_language to add one")
-    elif len(languages) == 1:
-        bot.reply_to(
-            message,
-            "Here is your language: {}.".format(languages[0])
-        )
-    else:
-        bot.reply_to(
-            message,
-            "Here are your languages: {}.".format(
-                ", ".join(languages)
+    try:
+        languages = get_available_languages(pool, message.chat.id)
+        if len(languages) == 0:
+            bot.reply_to(message, "You don't have any languages. Use /set_language to add one")
+        elif len(languages) == 1:
+            bot.reply_to(
+                message,
+                "Here is your language: {}.".format(languages[0])
             )
-        )
+        else:
+            bot.reply_to(
+                message,
+                "Here are your languages: {}.".format(
+                    ", ".join(languages)
+                )
+            )
+    except Exception as e:
+        logging.error("handle_show_languages failed", exc_info=e)
 
 
 @bot.message_handler(commands=["show_current_language"])
@@ -356,22 +382,30 @@ def handle_show_current_languages(message):
         handle_language_not_set(message)
 
 
-# @bot.message_handler(commands=["delete_language"])
-# def handle_delete_language(message):
-#     user = get_user(message.chat.id)
-#     language = user.get_current_lang()
-#     if language is None:
-#         handle_language_not_set(message)
-#         return
-#
-#     result = user.delete_language(language)
-#     if result:
-#         delete_language_from_vocab(pool, user)
-#         update_user(pool, user)
-#         bot.reply_to(message, "Successfully deleted language: {}.".format(language))
-#         logging.info("successfully deleted language: {}".format(language))
-#     else:
-#         bot.reply_to(message, "You don't have language {}.".format(language))
+@bot.message_handler(commands=["delete_language"])
+def handle_delete_language(message):
+    language = get_current_language(pool, message.chat.id)
+    if language is None:
+        handle_language_not_set(message)
+        return
+    
+    markup = types.ReplyKeyboardMarkup(row_width=len(DELETE_ARE_YOU_SURE), resize_keyboard=True, one_time_keyboard=True)
+    markup.add(*DELETE_ARE_YOU_SURE.keys(), row_width=len(DELETE_ARE_YOU_SURE))
+    bot.send_message(
+        message.chat.id,
+        "You are trying to delete language {}\n\n".format(language) +
+        "All your words, training sessions and groups for this language will be deleted without any possibility of recovery.\n\n"
+        "Are you sure you want to delete language?",
+        reply_markup=markup
+    )
+    bot.register_next_step_handler(message, process_delete_language, language=language)
+
+
+def process_delete_language(message, language):
+    delete_language(pool, message.chat.id, language)
+    bot.send_message(message.chat.id,
+                     "Language {} is deleted.\n".format(language) +
+                     "Check /show_languages to make sure. Use /set_language to set a new language")
 
 
 # TODO: delete words from groups too

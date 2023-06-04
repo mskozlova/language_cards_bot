@@ -8,6 +8,7 @@ USERS_TABLE_PATH = "users"
 VOCABS_TABLE_PATH = "vocabularies"
 GROUPS_TABLE_PATH = "groups"
 GROUPS_CONTENTS_TABLE_PATH = "group_contents"
+LANGUAGES_TABLE_PATH = "languages"
 TRAINING_SESSIONS_TABLE_PATH = "training_sessions"
 TRAINING_SESSIONS_INFO_TABLE_PATH = "training_session_info"
 WORDS_UPDATE_BUCKET_SIZE = 20
@@ -36,6 +37,7 @@ def get_new_session_id():
 
 
 # TODO: CAST ALL CONSTANTS IN SCRIPT TO THEIR SUPPOSED TYPES
+# TODO: language in vocabularies is String, not Utf8
 def create_user(pool, chat_id):
     def callee(session):
         result_sets = session.transaction(ydb.SerializableReadWrite()).execute(
@@ -131,6 +133,9 @@ def delete_user(pool, chat_id):
             WHERE chat_id == $chat_id;
             
             DELETE FROM `{}`
+            WHERE chat_id == $chat_id;
+            
+            DELETE FROM `{}`
             WHERE
                 chat_id == $chat_id
                 OR group_id IN $groups;
@@ -141,7 +146,74 @@ def delete_user(pool, chat_id):
                 OR group_id IN $groups;
             """.format(
                 chat_id, GROUPS_TABLE_PATH,
-                VOCABS_TABLE_PATH, USERS_TABLE_PATH,
+                VOCABS_TABLE_PATH, USERS_TABLE_PATH, LANGUAGES_TABLE_PATH,
+                TRAINING_SESSIONS_INFO_TABLE_PATH, TRAINING_SESSIONS_TABLE_PATH,
+                GROUPS_TABLE_PATH, GROUPS_CONTENTS_TABLE_PATH
+            ),
+            commit_tx=True,
+        )
+
+    return pool.retry_operation_sync(callee)
+
+
+def delete_language(pool, chat_id, language):
+    def callee(session):
+        session.transaction().execute(
+            """
+            $chat_id = {};
+            $language = "{}";
+            
+            $groups = (
+                SELECT group_id
+                FROM `{}`
+                WHERE
+                    chat_id == $chat_id
+                    AND language == $language
+                    AND is_creator
+            );
+            
+            DELETE FROM `{}`
+            WHERE
+                chat_id == $chat_id
+                AND language == $language;
+                
+            UPDATE `{}`
+            SET current_lang = NULL
+            WHERE chat_id == {};
+            
+            DELETE FROM `{}`
+            WHERE
+                chat_id == $chat_id
+                AND language == $language;
+
+            DELETE FROM `{}`
+            WHERE
+                chat_id == $chat_id
+                AND language == $language;
+            
+            DELETE FROM `{}`
+            WHERE
+                chat_id == $chat_id
+                AND language == $language;
+            
+            DELETE FROM `{}`
+            WHERE
+                (
+                    chat_id == $chat_id
+                    AND language == $language
+                )
+                OR group_id IN $groups;
+                
+            DELETE FROM `{}`
+            WHERE
+                (
+                    chat_id == $chat_id
+                    AND language == $language
+                )
+                OR group_id IN $groups;
+            """.format(
+                chat_id, language, GROUPS_TABLE_PATH,
+                VOCABS_TABLE_PATH, USERS_TABLE_PATH, LANGUAGES_TABLE_PATH,
                 TRAINING_SESSIONS_INFO_TABLE_PATH, TRAINING_SESSIONS_TABLE_PATH,
                 GROUPS_TABLE_PATH, GROUPS_CONTENTS_TABLE_PATH
             ),
@@ -268,15 +340,30 @@ def get_available_languages(pool, chat_id):
     def callee(session):
         result_sets = session.transaction().execute(
             """
-            SELECT DISTINCT language
+            SELECT language
             FROM `{}`
             WHERE chat_id == {}
             """.format(
-                VOCABS_TABLE_PATH, chat_id
+                LANGUAGES_TABLE_PATH, chat_id
             ),
             commit_tx=True,
         )
-        return [row["language"].decode("utf-8") for row in result_sets[0].rows]
+        return [row["language"] for row in result_sets[0].rows]
+
+    return pool.retry_operation_sync(callee)
+
+
+def user_add_language(pool, chat_id, language):
+    def callee(session):
+        session.transaction().execute(
+            """
+            INSERT INTO `{}` (`chat_id`, `language`) VALUES
+            (CAST({} AS Uint64), CAST('{}' AS Utf8))
+            """.format(
+                LANGUAGES_TABLE_PATH, chat_id, language
+            ),
+            commit_tx=True,
+        )
 
     return pool.retry_operation_sync(callee)
 
