@@ -35,21 +35,20 @@ def get_new_session_id():
     return int(datetime.datetime.timestamp(datetime.datetime.now()))
 
 
-# TODO: use prepared statement
-# def update_user(pool, user):
-#     def callee(session):
-#         session.transaction().execute(
-#             """
-#             UPSERT INTO `{}` (chat_id, current_lang, languages) VALUES
-#                 ({}, '{}', '{}');
-#             """.format(
-#                 USERS_TABLE_PATH, user.chat_id, user.current_lang,
-#                 json.dumps(list(user.vocabs.keys()), ensure_ascii=False)
-#             ),
-#             commit_tx=True,
-#         )
+# TODO: CAST ALL CONSTANTS IN SCRIPT TO THEIR SUPPOSED TYPES
+def create_user(pool, chat_id):
+    def callee(session):
+        result_sets = session.transaction(ydb.SerializableReadWrite()).execute(
+            """
+            INSERT INTO `{}` (chat_id) VALUES
+            ({})
+            """.format(
+                USERS_TABLE_PATH, chat_id
+            ),
+            commit_tx=True,
+        )
 
-#     return pool.retry_operation_sync(callee)
+    return pool.retry_operation_sync(callee)
 
 
 def get_user_info(pool, chat_id):
@@ -109,14 +108,42 @@ def delete_user(pool, chat_id):
     def callee(session):
         session.transaction().execute(
             """
-            DELETE FROM `{}`
-            WHERE chat_id == {};
+            $chat_id = {};
+            
+            $groups = (
+                SELECT group_id
+                FROM `{}`
+                WHERE
+                    chat_id == $chat_id
+                    AND is_creator
+            );
             
             DELETE FROM `{}`
-            WHERE chat_id == {};
+            WHERE chat_id == $chat_id;
+            
+            DELETE FROM `{}`
+            WHERE chat_id == $chat_id;
+            
+            DELETE FROM `{}`
+            WHERE chat_id == $chat_id;
+            
+            DELETE FROM `{}`
+            WHERE chat_id == $chat_id;
+            
+            DELETE FROM `{}`
+            WHERE
+                chat_id == $chat_id
+                OR group_id IN $groups;
+                
+            DELETE FROM `{}`
+            WHERE
+                chat_id == $chat_id
+                OR group_id IN $groups;
             """.format(
-                USERS_TABLE_PATH, chat_id,
-                VOCABS_TABLE_PATH, chat_id
+                chat_id, GROUPS_TABLE_PATH,
+                VOCABS_TABLE_PATH, USERS_TABLE_PATH,
+                TRAINING_SESSIONS_INFO_TABLE_PATH, TRAINING_SESSIONS_TABLE_PATH,
+                GROUPS_TABLE_PATH, GROUPS_CONTENTS_TABLE_PATH
             ),
             commit_tx=True,
         )
@@ -332,7 +359,7 @@ def create_training_session(pool, chat_id, session_info):
             
             $words_sample = (
                 SELECT
-                    $chat_id AS chat_id,
+                    CAST($chat_id AS Uint64) AS chat_id,
                     $session_id AS session_id,
                     word,
                     translation,
@@ -383,7 +410,7 @@ def create_group_training_session(pool, chat_id, session_info):
             
             $words_sample = (
                 SELECT
-                    $chat_id AS chat_id,
+                    CAST($chat_id AS Uint64) AS chat_id,
                     $session_id AS session_id,
                     v.word AS word,
                     v.translation AS translation,
@@ -447,7 +474,7 @@ def set_training_scores(pool, chat_id, session_id, word_idxs, scores):
 
             $new_scores = (
                 SELECT
-                    $chat_id AS chat_id,
+                    CAST($chat_id AS Uint64) AS chat_id,
                     $session_id AS session_id,
                     ListZip($word_idxs, $scores) AS scores,
             );

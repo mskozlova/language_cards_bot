@@ -47,10 +47,11 @@ GROUP_ADD_WORDS_PREFIXES = {
     0: "🖤",
     1: "💚",
 }
-GROUP_DELETE_ARE_YOU_SURE = {
+DELETE_ARE_YOU_SURE = {
     "Yes!": True,
     "No..": False,
 }
+
 
 ###################
 # Command handlers
@@ -58,32 +59,49 @@ GROUP_DELETE_ARE_YOU_SURE = {
 @bot.message_handler(commands=["help", "start"])
 def handle_help(message):
     logging.debug("{} initiated from chat_id {}".format(message.text, message.chat.id))
+    try:
+        logging.debug("{} initiated, chat_id: {}".format(message.text, message.chat.id))
+        bot.send_message(message.chat.id,
+                        "Ahoy, sexy! I am a cute little bot for remembering "
+                        "words you've learned during your language course. Here's how you can use me:\n\n"
+                        "- /help or /start to read this message again.\n"
+                        "- /set_language to set current vocabulary "
+                        "(you can add multiple and switch between them without erasing the progress).\n"
+                        "- /show_languages to see the list of your languages.\n"
+                        "- /add_words to add words to current vocabulary.\n"
+                        "- /show_words to print out all words you saved for current language.\n"
+                        "- /delete_words to delete some words from current vocabulary.\n"
+                        "- /create_group to create new group for words.\n"
+                        "- /delete_group to delete one of your groups.\n"
+                        "- /show_groups to show your existing groups for current language.\n"
+                        "- /group_add_words to add some words from you vocabulary to one of your groups.\n"
+                        "- /group_delete_words to delete some words from one of your groups.\n"
+                        "- /train to choose training strategy and start training.\n"
+                        "- /stop to stop training session without saving the results.\n"
+                        "- /forget_me to delete all the information I have about you: languages, words, groups, etc.")
+                        # TODO: /delete_language)
+    except Exception as e:
+        logging.error("help failed", exc_info=e)
+
+
+@bot.message_handler(commands=["forget_me"])
+def handle_forget_me(message):
+    markup = types.ReplyKeyboardMarkup(row_width=len(DELETE_ARE_YOU_SURE), resize_keyboard=True, one_time_keyboard=True)
+    markup.add(*DELETE_ARE_YOU_SURE.keys(), row_width=len(DELETE_ARE_YOU_SURE))
+    bot.send_message(
+        message.chat.id,
+        "All your languages, words, training sessions and groups will be deleted without any possibility of recovery.\n\n"
+        "Are you sure you want to delete all information the bot has about you?",
+        reply_markup=markup
+    )
+    bot.register_next_step_handler(message, process_forget_me)
+
+
+def process_forget_me(message):
+    delete_user(pool, message.chat.id)
     bot.send_message(message.chat.id,
-                     "Ahoy, sexy! I am a cute little bot for remembering "
-                     "words you've learned during your language course. Here's how you can use me:\n\n"
-                     "- /help or /start to read this message again.\n"
-                     "- /set_language to set current vocabulary "
-                     "(you can add multiple and switch between them without erasing the progress).\n"
-                     "- /show_languages to see the list of your languages.\n"
-                     "- /add_words to add words to current vocabulary.\n"
-                     "- /show_words to print out all words you saved for current language.\n"
-                     "- /delete_words to delete some words from current vocabulary.\n"
-                     "- /create_group to create new group for words.\n"
-                     "- /delete_group to delete one of your groups.\n"
-                     "- /show_groups to show your existing groups for current language.\n"
-                     "- /group_add_words to add some words from you vocabulary to one of your groups.\n"
-                     "- /group_delete_words to delete some words from one of your groups.\n"
-                     "- /train to choose training strategy and start training.\n"
-                     "- /stop to stop training session without saving the results.\n")
-                     #"- /forget_me to delete all the information I have about you.\n")
-    # TODO: all commands
-
-
-# @bot.message_handler(commands=["forget_me"])
-# def handle_forget_me(message):
-#     delete_user(message.chat.id)
-#     bot.send_message(message.chat.id,
-#                      "Farewell, my friend! Come back soon.")
+                     "👋 Farewell, my friend! It's sad to see you go.\n"
+                     "Check /show_languages to make sure you're all cleaned up.")
 
 
 @bot.message_handler(commands=["set_language"])
@@ -98,8 +116,14 @@ def handle_set_language(message):
 def process_setting_language(message):
     try:
         language = message.text.lower().strip()
+        user_info = get_user_info(pool, message.chat.id)
+        
+        if len(user_info) == 0: # new user!
+            bot.send_message(message.chat.id, "Hey! I can see you are new here. Welcome!".format(language))
+            create_user(pool, message.chat.id)
+        
         update_current_lang(pool, message.chat.id, language)
-        bot.reply_to(message, "Language set: {}.\nYou can /add_words to it or /train".format(language))
+        bot.send_message(message.chat.id, "Language set: {}.\nYou can /add_words to it or /train".format(language))
     except Exception as Argument:
         logging.exception("processing setting language failed")
 
@@ -305,7 +329,7 @@ def process_show_words_batch(message, words, batch_size, batch_number, original_
 def handle_show_languages(message):
     languages = get_available_languages(pool, message.chat.id)
     if len(languages) == 0:
-        bot.reply_to(message, "You don't have any languages.")
+        bot.reply_to(message, "You don't have any languages. Use /set_language to add one")
     elif len(languages) == 1:
         bot.reply_to(
             message,
@@ -476,8 +500,8 @@ def process_group_deletion_check_sure(message, language):
         group_id = groups[0]["group_id"].decode("utf-8")
         group_name = groups[0]["group_name"].decode("utf-8")
         
-        markup = types.ReplyKeyboardMarkup(row_width=len(GROUP_DELETE_ARE_YOU_SURE), resize_keyboard=True, one_time_keyboard=True)
-        markup.add(*GROUP_DELETE_ARE_YOU_SURE.keys(), row_width=len(GROUP_DELETE_ARE_YOU_SURE))
+        markup = types.ReplyKeyboardMarkup(row_width=len(DELETE_ARE_YOU_SURE), resize_keyboard=True, one_time_keyboard=True)
+        markup.add(*DELETE_ARE_YOU_SURE.keys(), row_width=len(DELETE_ARE_YOU_SURE))
         bot.send_message(
             message.chat.id,
             "Are you sure you want to delete group '{}' for language {}?\nThis will NOT affect words in your vocabulary!".format(group_name, language),
@@ -505,7 +529,7 @@ def process_group_deletion(message, language, group_id, group_name, is_creator):
             return
         
         delete_group(pool, group_id)
-        bot.send_message(message.chat.id, "Group '{}' successfully deleted! /show_groups".format(group_name))
+        bot.send_message(message.chat.id, "👍 Group '{}' successfully deleted! /show_groups".format(group_name))
     except Exception as e:
         logging.error("process_group_deletion failed", exc_info=e)
 
