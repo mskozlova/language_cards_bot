@@ -38,7 +38,9 @@ def get_hint(info, order="from", hint="no hints"):
         pass
 
 
-def compare_user_input_with_db(user_input, db, order="from"):
+def compare_user_input_with_db(user_input, db, hints_type=None, order="from"):
+    if hints_type == "flashcards":
+        return True
     if order == "from":
         return any(t == user_input.lower().strip() for t in json.loads(db["translation"]))
     elif order == "to":

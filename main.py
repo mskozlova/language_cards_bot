@@ -2,6 +2,7 @@ from hashlib import blake2b
 import logging
 import os
 import random
+import re
 
 import telebot
 from telebot import types
@@ -34,7 +35,7 @@ pool = ydb.SessionPool(ydb_driver)
 TRAIN_STRATEGY_OPTIONS = ["random", "new", "bad", "group"]
 TRAIN_DIRECTION_OPTIONS = {"➡️ㅤ": "to", "⬅️ㅤ": "from"}  # invisible symbols to avoid large emoji
 TRAIN_COUNT_OPTIONS = ["10", "20", "All"]
-TRAIN_HINTS_OPTIONS = ["no hints", "a****z", "test"]
+TRAIN_HINTS_OPTIONS = ["flashcards", "test", "a****z", "no hints"]
 TRAIN_MAX_N_WORDS = 9999;
 TRAIN_CORRECT_ANSWER = "✅ㅤ" # invisible symbol to avoid large emoji
 TRAIN_WRONG_ANSWER = "❌ {}"
@@ -156,6 +157,7 @@ def handle_language_not_set(message):
 
 
 # TODO: manage possible timeout
+# TODO: not allow any special characters apart from "-"
 @bot.message_handler(commands=["add_words"])
 def handle_add_words(message):
     language = get_current_language(pool, message.chat.id)
@@ -556,12 +558,12 @@ def process_group_deletion_check_sure(message, language):
 def process_group_deletion(message, language, group_id, group_name, is_creator):
     try:
         # TODO: when sharing think of local / global deletions (use is_creator)
-        if message.text not in GROUP_DELETE_ARE_YOU_SURE:
+        if message.text not in DELETE_ARE_YOU_SURE:
             bot.reply_to(message, "Unknown command, please try again: /delete_group",
                         reply_markup=empty_markup)
             return
         
-        if not GROUP_DELETE_ARE_YOU_SURE[message.text]:
+        if not DELETE_ARE_YOU_SURE[message.text]:
             bot.send_message(
                 message.chat.id, "Cancelled group deletion!",
                 reply_markup=empty_markup
@@ -1008,18 +1010,34 @@ def get_az_hint(word):
 
 
 def format_train_message(word, translation, hints_type):
-    if hints_type != "a****z":
-        return word
-    else:
-        return "{}\n{}".format(
-            word,
-            get_az_hint(translation)
+    if hints_type == "flashcards":
+        return "{}\n\n||{}||".format(
+            re.escape(word),
+            re.escape(translation) + " " * max(40 - len(translation), 0) + "ㅤ" # invisible symbol to extend spoiler
         )
+    
+    if hints_type == "a****z":
+        return "{}\n{}".format(
+            re.escape(word),
+            re.escape(get_az_hint(translation))
+        )
+
+    return "{}".format(re.escape(word))
 
 
 def format_train_buttons(translation, hints, hints_type):
+    if hints_type == "flashcards":
+        markup = types.ReplyKeyboardMarkup(
+            row_width=1,
+            one_time_keyboard=True,
+            resize_keyboard=True
+        )
+        markup.add(*["/next", "/stop"])
+        return markup
+    
     if hints_type != "test":
         return empty_markup
+    
     all_words_list = hints + [translation, ]
     random.shuffle(all_words_list)
     markup = types.ReplyKeyboardMarkup(
@@ -1046,11 +1064,12 @@ def get_train_step(message, words, session_info, step, scores):
                 reply_markup=empty_markup
             )
             return
-        if step != 0: # first iteration
+        if step != 0: # not a first iteration
             word = words[step - 1]
             is_correct = compare_user_input_with_db(
                 message.text,
                 word,
+                session_info["hints"],
                 session_info["direction"]
             )
             scores.append(int(is_correct))
@@ -1103,7 +1122,8 @@ def get_train_step(message, words, session_info, step, scores):
                 get_translation(next_word, session_info["direction"]),
                 [get_translation(hint, session_info["direction"]) for hint in hints],
                 session_info["hints"]
-            )
+            ),
+            parse_mode="MarkdownV2"
         )
         bot.register_next_step_handler(
             reply_message, get_train_step,
