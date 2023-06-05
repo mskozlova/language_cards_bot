@@ -16,6 +16,8 @@ from word import format_word_for_group_action, get_word_from_group_action
 bot = telebot.TeleBot(os.environ.get("BOT_TOKEN"))
 empty_markup = types.ReplyKeyboardRemove()
 
+# TODO: move constants to a separate file
+# TODO: move texts to a separate file
 logging.getLogger().setLevel(logging.DEBUG)
 
 
@@ -69,7 +71,6 @@ def handle_help(message):
                         "- /set_language to set current vocabulary "
                         "(you can add multiple and switch between them without erasing the progress).\n"
                         "- /delete_language to delete current language with all data on words, groups, training sessions.\n"
-                        "- /show_languages to see the list of your languages.\n"
                         "- /add_words to add words to current vocabulary.\n"
                         "- /show_words to print out all words you saved for current language.\n"
                         "- /delete_words to delete some words from current vocabulary.\n"
@@ -81,6 +82,7 @@ def handle_help(message):
                         "- /train to choose training strategy and start training.\n"
                         "- /stop to stop training session without saving the results.\n"
                         "- /forget_me to delete all the information I have about you: languages, words, groups, etc.")
+                        # TODO: /share_group, /add_group
     except Exception as e:
         logging.error("help failed", exc_info=e)
 
@@ -102,10 +104,9 @@ def process_forget_me(message):
     delete_user(pool, message.chat.id)
     bot.send_message(message.chat.id,
                      "👋 Farewell, my friend! It's sad to see you go.\n"
-                     "Check /show_languages to make sure you're all cleaned up.")
+                     "Check /set_language to make sure you're all cleaned up.")
 
 
-# TODO: language does not exist without words in it
 @bot.message_handler(commands=["set_language"])
 def handle_set_language(message):
     try:
@@ -348,30 +349,6 @@ def process_show_words_batch(message, words, batch_size, batch_number, original_
         logging.error("showing word batch failed", exc_info=e)
 
 
-
-# TODO: delete this command
-@bot.message_handler(commands=["show_languages"])
-def handle_show_languages(message):
-    try:
-        languages = get_available_languages(pool, message.chat.id)
-        if len(languages) == 0:
-            bot.reply_to(message, "You don't have any languages. Use /set_language to add one")
-        elif len(languages) == 1:
-            bot.reply_to(
-                message,
-                "Here is your language: {}.".format(languages[0])
-            )
-        else:
-            bot.reply_to(
-                message,
-                "Here are your languages: {}.".format(
-                    ", ".join(languages)
-                )
-            )
-    except Exception as e:
-        logging.error("handle_show_languages failed", exc_info=e)
-
-
 @bot.message_handler(commands=["show_current_language"])
 def handle_show_current_languages(message):
     current_language = get_current_language(pool, message.chat.id)
@@ -411,7 +388,7 @@ def process_delete_language(message, language):
         delete_language(pool, message.chat.id, language)
         bot.send_message(message.chat.id,
                         "Language {} is deleted.\n".format(language) +
-                        "Check /show_languages to make sure. Use /set_language to set a new language")
+                        "Check /set_language to make sure and to set a new language.")
     except Exception as e:
         logging.error("process_delete_language failed", exc_info=e)
 
