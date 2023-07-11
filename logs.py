@@ -1,9 +1,24 @@
+import json
 import logging
-from typing import Any
+from pythonjsonlogger import jsonlogger
 from telebot.types import Message
 
 
-logging.getLogger().setLevel(logging.DEBUG)
+# https://cloud.yandex.com/en/docs/functions/operations/function/logs-write#function-examples
+class YcLoggingFormatter(jsonlogger.JsonFormatter):
+    def add_fields(self, log_record, record, message_dict):
+        super(YcLoggingFormatter, self).add_fields(log_record, record, message_dict)
+        log_record["logger"] = record.name
+        log_record["level"] = str.replace(str.replace(record.levelname, "WARNING", "WARN"), "CRITICAL", "FATAL")
+
+
+logHandler = logging.StreamHandler()
+logHandler.setFormatter(YcLoggingFormatter("%(message)s %(level)s %(logger)s"))
+
+logger = logging.getLogger("logger")
+logger.propagate = False
+logger.addHandler(logHandler)
+logger.setLevel(logging.DEBUG)
 
 
 def find_in_args(args, target_type):
@@ -35,35 +50,45 @@ def logged_execution(func):
     def wrapper(*args, **kwargs):
         chat_id, text = get_message_info(*args, **kwargs)
 
-        logging.debug("[LOG] Starting {} - chat_id {} - text {} - args {}, kwargs {}".format(
-            func.__name__,
-            chat_id, text,
-            args, kwargs
-        ))
+        logger.info(
+            "[LOG] Starting {} - chat_id {}".format(func.__name__, chat_id),
+            extra={"text": text, "arg": "{}".format(args), "kwarg": "{}".format(kwargs)}
+        )
         try:
             func(*args, **kwargs)
-            logging.debug("[LOG] Finished {} - chat_id {}".format(func.__name__, chat_id))
+            logger.info(
+                "[LOG] Finished {} - chat_id {}".format(func.__name__, chat_id),
+                extra={"text": text, "arg": "{}".format(args), "kwarg": "{}".format(kwargs)}
+            )
         except Exception as e:
-            logging.error("[LOG] {} failed - chat_id {} - text {}".format(func.__name__, chat_id, text), exc_info=e)
+            logger.error(
+                "[LOG] Failed {} - chat_id {} - exception {}".format(func.__name__, chat_id, e),
+                extra={"text": text, "arg": "{}".format(args), "kwarg": "{}".format(kwargs)}
+            )
     return wrapper
 
 
 class CallbackLogger:
-    def __init__(self, func):
-        logging.debug("[LOG][CALLBACK] Registered {}".format(func.__name__))
+    def __init__(self, func): # TODO: add chat_id
+        logger.info("[LOG][CALLBACK] Registered {}".format(func.__name__))
         self.func = func
         
     def __call__(self, *args, **kwargs):
         chat_id, text = get_message_info(*args, **kwargs)
         
-        logging.debug("[LOG][CALLBACK] Starting {} - chat_id {} - text {} - args {}, kwargs {}".format(
-            self.func.__name__,
-            chat_id, text,
-            args, kwargs
-        ))
+        logger.info(
+            "[LOG][CALLBACK] Starting {} - chat_id {}".format(self.func.__name__, chat_id),
+            extra={"text": text, "arg": "{}".format(args), "kwarg": "{}".format(kwargs)}
+        )
 
         try:
             self.func(*args, **kwargs)
-            logging.debug("[LOG][CALLBACK] Finished {} - chat_id {}".format(self.func.__name__, chat_id))
+            logger.info(
+                "[LOG][CALLBACK] Finished {} - chat_id {}".format(self.func.__name__, chat_id),
+                extra={"text": text, "arg": "{}".format(args), "kwarg": "{}".format(kwargs)}
+            )
         except Exception as e:
-            logging.error("[LOG][CALLBACK] {} failed - chat_id {} - text {}".format(self.func.__name__, chat_id, text), exc_info=e)
+            logger.error(
+                "[LOG][CALLBACK] Failed {} - chat_id {} - exception {}".format(self.func.__name__, chat_id, e),
+                extra={"text": text, "arg": "{}".format(args), "kwarg": "{}".format(kwargs)}
+            )
