@@ -86,6 +86,8 @@ add_words_instruction_2 = (
 
 add_words_finished = "Finished! Saved {} words"
 
+add_words_cancelled = "Cancelled! No words saved."
+
 add_words_none_added = "You didn't add anything. Try again /add_words?"
 
 add_words_translate = "Translate {}"

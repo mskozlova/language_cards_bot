@@ -1,5 +1,6 @@
-import json
 import logging
+import traceback
+
 from pythonjsonlogger import jsonlogger
 from telebot.types import Message
 
@@ -63,7 +64,10 @@ def logged_execution(func):
         except Exception as e:
             logger.error(
                 "[LOG] Failed {} - chat_id {} - exception {}".format(func.__name__, chat_id, e),
-                extra={"text": text, "arg": "{}".format(args), "kwarg": "{}".format(kwargs)}
+                extra={
+                    "text": text, "arg": "{}".format(args), "kwarg": "{}".format(kwargs),
+                    "error": e, "traceback": traceback.format_exc(),
+                }
             )
     return wrapper
 
@@ -90,5 +94,8 @@ class CallbackLogger:
         except Exception as e:
             logger.error(
                 "[LOG][CALLBACK] Failed {} - chat_id {} - exception {}".format(self.func.__name__, chat_id, e),
-                extra={"text": text, "arg": "{}".format(args), "kwarg": "{}".format(kwargs)}
+                extra={
+                    "text": text, "arg": "{}".format(args), "kwarg": "{}".format(kwargs),
+                    "error": e, "traceback": traceback.format_exc(),
+                }
             )

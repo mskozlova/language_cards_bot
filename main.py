@@ -1,5 +1,5 @@
 from hashlib import blake2b
-# import logs
+import json
 import os
 import random
 import re
@@ -8,8 +8,8 @@ import telebot
 from telebot import types
 import ydb
 
-from db_functions import *
-from logs import logged_execution, CallbackLogger
+import database.model as db_model
+from logs import logger, logged_execution, CallbackLogger
 import texts
 from word import compare_user_input_with_db, get_translation, get_word, get_overall_score, get_total_trains, format_word_for_listing
 from word import format_word_for_group_action, get_word_from_group_action
@@ -19,8 +19,6 @@ bot = telebot.TeleBot(os.environ.get("BOT_TOKEN"))
 empty_markup = types.ReplyKeyboardRemove()
 
 # TODO: move constants to a separate file
-# TODO: move texts to a separate file
-# logging.getLogger().setLevel(logging.DEBUG)
 
 
 # YDB initializing
@@ -79,18 +77,19 @@ def handle_forget_me(message):
 
 
 def process_forget_me(message):
-    delete_user(pool, message.chat.id)
+    db_model.delete_user(pool, message.chat.id)
     bot.send_message(message.chat.id, texts.forget_me_final)
 
 
+# TODO: check language name (same as group name)
 @bot.message_handler(commands=["set_language"])
 @logged_execution
 def handle_set_language(message):
-    language = get_current_language(pool, message.chat.id)
+    language = db_model.get_current_language(pool, message.chat.id)
     if language is not None:
         bot.send_message(message.chat.id, texts.current_language.format(language))
     
-    languages = get_available_languages(pool, message.chat.id)
+    languages = db_model.get_available_languages(pool, message.chat.id)
     
     if len(languages) == 0:
         bot.send_message(message.chat.id, texts.no_languages_yet)
@@ -109,11 +108,11 @@ def process_setting_language(message, languages):
         return
     
     language = message.text.lower().strip()
-    user_info = get_user_info(pool, message.chat.id)
+    user_info = db_model.get_user_info(pool, message.chat.id)
     
     if len(user_info) == 0: # new user!
         bot.send_message(message.chat.id, texts.welcome, reply_markup=empty_markup)
-        create_user(pool, message.chat.id)
+        db_model.create_user(pool, message.chat.id)
         
     if language not in languages:
         bot.send_message(
@@ -121,9 +120,9 @@ def process_setting_language(message, languages):
             texts.new_language_created.format(language),
             reply_markup=empty_markup
         )
-        user_add_language(pool, message.chat.id, language)
+        db_model.user_add_language(pool, message.chat.id, language)
     
-    update_current_lang(pool, message.chat.id, language)
+    db_model.update_current_lang(pool, message.chat.id, language)
     bot.send_message(message.chat.id, texts.language_is_set.format(language), reply_markup=empty_markup)
 
 
@@ -136,7 +135,7 @@ def handle_language_not_set(message):
 @bot.message_handler(commands=["add_words"])
 @logged_execution
 def handle_add_words(message):
-    language = get_current_language(pool, message.chat.id)
+    language = db_model.get_current_language(pool, message.chat.id)
     if language is None:
         handle_language_not_set(message)
         return
@@ -163,10 +162,13 @@ def process_adding_words(message, language):
 
 def process_word_translation(message, language, words, translations):
     if message.text != "/stop":
-        translations.append(json.dumps([m.strip().lower() for m in message.text.split("/")]))    
+        translations.append(json.dumps([m.strip().lower() for m in message.text.split("/")]))
+    else:
+        bot.send_message(message.chat.id, texts.add_words_cancelled)
+        return
     
     if len(translations) == len(words) or message.text == "/stop": # translation is over
-        update_vocab(pool, message.chat.id, language, list(zip(words, translations)))
+        db_model.update_vocab(pool, message.chat.id, language, words, translations)
         bot.send_message(
             message.chat.id, texts.add_words_finished.format(len(translations))
         )
@@ -182,12 +184,12 @@ def process_word_translation(message, language, words, translations):
 @bot.message_handler(commands=["show_words"])
 @logged_execution
 def handle_show_words(message):
-    language = get_current_language(pool, message.chat.id)
+    language = db_model.get_current_language(pool, message.chat.id)
     if language is None:
         handle_language_not_set(message)
         return
 
-    vocab = get_full_vocab(pool, message.chat.id, language)
+    vocab = db_model.get_full_vocab(pool, message.chat.id, language)
     for word in vocab:
         word["score"] = get_overall_score(word)
         word["n_trains"] = get_total_trains(word)
@@ -282,7 +284,7 @@ def process_show_words_batch(message, words, batch_size, batch_number, original_
 @bot.message_handler(commands=["show_current_language"])
 @logged_execution
 def handle_show_current_languages(message):
-    current_language = get_current_language(pool, message.chat.id)
+    current_language = db_model.get_current_language(pool, message.chat.id)
     if current_language is not None:
         bot.reply_to(
             message,
@@ -295,7 +297,7 @@ def handle_show_current_languages(message):
 @bot.message_handler(commands=["delete_language"])
 @logged_execution
 def handle_delete_language(message):
-    language = get_current_language(pool, message.chat.id)
+    language = db_model.get_current_language(pool, message.chat.id)
     if language is None:
         handle_language_not_set(message)
         return
@@ -311,7 +313,7 @@ def handle_delete_language(message):
 
 
 def process_delete_language(message, language):
-    delete_language(pool, message.chat.id, language)
+    db_model.delete_language(pool, message.chat.id, language)
     bot.send_message(message.chat.id, texts.delete_language_final.format(language))
 
 
@@ -319,7 +321,7 @@ def process_delete_language(message, language):
 @bot.message_handler(commands=["delete_words"])
 @logged_execution
 def handle_delete_words(message):
-    language = get_current_language(pool, message.chat.id)
+    language = db_model.get_current_language(pool, message.chat.id)
     if language is None:
         handle_language_not_set(message)
         return
@@ -330,8 +332,8 @@ def handle_delete_words(message):
 
 def process_deleting_words(message, language):
     words = message.text.split("\n")
-    existing_words = get_words_from_vocab(pool, message.chat.id, language, words)
-    delete_words_from_vocab(pool, message.chat.id, language, words)
+    existing_words = db_model.get_words_from_vocab(pool, message.chat.id, language, words)
+    db_model.delete_words_from_vocab(pool, message.chat.id, language, words)
     bot.reply_to(
         message,
         texts.deleted_words_list.format(
@@ -345,7 +347,7 @@ def process_deleting_words(message, language):
 @bot.message_handler(commands=["create_group"])
 @logged_execution
 def handle_create_group(message):
-    current_language = get_current_language(pool, message.chat.id)
+    current_language = db_model.get_current_language(pool, message.chat.id)
     if current_language is None:
         handle_language_not_set(message)
         return
@@ -358,7 +360,7 @@ def process_group_creation(message, language):
     # TODO: check latin letters and underscores
     # TODO: check name collisions with shared groups
     group_name = message.text.strip()
-    if len(get_group_by_name(pool, message.chat.id, language, group_name)) > 0:
+    if len(db_model.get_group_by_name(pool, message.chat.id, language, group_name)) > 0:
         bot.reply_to(message, texts.group_already_exists)
         return
     
@@ -366,14 +368,14 @@ def process_group_creation(message, language):
     group_key = "{}-{}-{}".format(message.chat.id, language, group_name)
     group_id.update(group_key.encode())
     
-    add_group(pool, message.chat.id, language=language,
-              group_name=group_name, group_id=group_id.hexdigest(), is_creator=True)
+    db_model.add_group(pool, message.chat.id, language=language,
+                       group_name=group_name, group_id=group_id.hexdigest(), is_creator=True)
     bot.reply_to(message, texts.group_created)
 
 
 def process_show_groups(message, language):
     # TODO: handle large number of groups
-    groups = get_all_groups(pool, message.chat.id, language)
+    groups = db_model.get_all_groups(pool, message.chat.id, language)
     
     if len(groups) == 0:
         bot.reply_to(message, texts.no_groups_yet)
@@ -394,7 +396,7 @@ def process_show_groups(message, language):
 @bot.message_handler(commands=["delete_group"])
 @logged_execution
 def handle_delete_group(message):
-    current_language = get_current_language(pool, message.chat.id)
+    current_language = db_model.get_current_language(pool, message.chat.id)
     if current_language is None:
         handle_language_not_set(message)
         return
@@ -412,11 +414,11 @@ def process_group_deletion_check_sure(message, language):
         bot.reply_to(message, texts.exited, reply_markup=empty_markup)
         return
     
-    groups = get_group_by_name(pool, message.chat.id, language, message.text)
+    groups = db_model.get_group_by_name(pool, message.chat.id, language, message.text)
     
     if len(groups) == 0:
         bot.reply_to(message, texts.no_such_group.format("/delete_group"),
-                        reply_markup=empty_markup)
+                     reply_markup=empty_markup)
         return
     
     if not groups[0]["is_creator"]:
@@ -456,14 +458,14 @@ def process_group_deletion(message, language, group_id, group_name, is_creator):
         )
         return
     
-    delete_group(pool, group_id)
+    db_model.delete_group(pool, group_id)
     bot.send_message(message.chat.id, texts.delete_group_success.format(group_name))
 
 
 @bot.message_handler(commands=["show_groups"])
 @logged_execution
 def handle_show_groups(message):
-    current_language = get_current_language(pool, message.chat.id)
+    current_language = db_model.get_current_language(pool, message.chat.id)
     reply_message = CallbackLogger(process_show_groups)(message, current_language)
     bot.register_next_step_handler(reply_message, CallbackLogger(process_show_group), language=current_language)
     
@@ -473,7 +475,7 @@ def process_show_group(message, language):
         bot.reply_to(message, texts.show_group_done, reply_markup=empty_markup)
         return
     
-    groups = get_group_by_name(pool, message.chat.id, language, message.text)
+    groups = db_model.get_group_by_name(pool, message.chat.id, language, message.text)
     
     if len(groups) == 0:
         bot.reply_to(message, texts.no_such_group.format("/show_groups"),
@@ -481,7 +483,7 @@ def process_show_group(message, language):
         return
     
     group_id = groups[0]["group_id"].decode("utf-8")
-    group_contents = sorted(get_group_contents(pool, group_id), key=lambda w: w["word"])
+    group_contents = sorted(db_model.get_group_contents(pool, group_id), key=lambda w: w["word"])
     for word in group_contents:
         word["score"] = get_overall_score(word)
         word["n_trains"] = get_total_trains(word)
@@ -500,7 +502,7 @@ def process_show_group(message, language):
 @bot.message_handler(commands=["group_add_words"])
 @logged_execution
 def handle_group_add_words(message):
-    current_language = get_current_language(pool, message.chat.id)
+    current_language = db_model.get_current_language(pool, message.chat.id)
     reply_message = CallbackLogger(process_show_groups)(message, current_language)
     bot.register_next_step_handler(
         reply_message,
@@ -529,9 +531,9 @@ def get_keyboard_markup(choices, mask, additional_commands=[], row_width=2):
 def save_words_edit_to_group(chat_id, language, group_id, words, action):
     if len(words) > 0:
         if action == "add":
-            add_words_to_group(pool, chat_id, language, group_id, words)
+            db_model.add_words_to_group(pool, chat_id, language, group_id, words)
         elif action == "delete":
-            delete_words_from_group(pool, chat_id, language, group_id, words)
+            db_model.delete_words_from_group(pool, chat_id, language, group_id, words)
 
     return len(words)
 
@@ -651,7 +653,7 @@ def process_choose_group_to_add_words(message, language):
         bot.reply_to(message, texts.exited, reply_markup=empty_markup)
         return
     
-    groups = get_group_by_name(pool, message.chat.id, language, message.text)
+    groups = db_model.get_group_by_name(pool, message.chat.id, language, message.text)
     
     if len(groups) == 0:
         bot.reply_to(message, texts.no_such_group.format("/group_add_words"),
@@ -666,8 +668,8 @@ def process_choose_group_to_add_words(message, language):
     group_id = groups[0]["group_id"].decode("utf-8")
     group_name = groups[0]["group_name"].decode("utf-8")
     
-    vocabulary = get_full_vocab(pool, message.chat.id, language)
-    words_in_group = set([entry["word"] for entry in get_group_contents(pool, group_id)])
+    vocabulary = db_model.get_full_vocab(pool, message.chat.id, language)
+    words_in_group = set([entry["word"] for entry in db_model.get_group_contents(pool, group_id)])
     
     words_to_add = []
     for entry in vocabulary:
@@ -716,7 +718,7 @@ def process_choose_sorting_to_add_words(message, language, group_id, group_name,
 @bot.message_handler(commands=["group_delete_words"])
 @logged_execution
 def handle_group_delete_words(message):
-    current_language = get_current_language(pool, message.chat.id)
+    current_language = db_model.get_current_language(pool, message.chat.id)
     reply_message = CallbackLogger(process_show_groups)(message, current_language)
     bot.register_next_step_handler(
         reply_message,
@@ -730,7 +732,7 @@ def process_choose_group_to_delete_words(message, language):
         bot.reply_to(message, texts.exited, reply_markup=empty_markup)
         return
     
-    groups = get_group_by_name(pool, message.chat.id, language, message.text)
+    groups = db_model.get_group_by_name(pool, message.chat.id, language, message.text)
     
     if len(groups) == 0:
         bot.reply_to(message, texts.no_such_group.format("/group_delete_words"),
@@ -745,7 +747,10 @@ def process_choose_group_to_delete_words(message, language):
     group_id = groups[0]["group_id"].decode("utf-8")
     group_name = groups[0]["group_name"].decode("utf-8")
     
-    words_in_group = sorted(get_group_contents(pool, group_id), key=lambda entry: entry["translation"])
+    words_in_group = sorted(
+        db_model.get_group_contents(pool, group_id),
+        key=lambda entry: entry["translation"]
+    )
     
     if len(words_in_group) == 0:
         bot.reply_to(message, texts.group_edit_empty)
@@ -761,7 +766,7 @@ def process_choose_group_to_delete_words(message, language):
 @bot.message_handler(commands=["train"])
 @logged_execution
 def handle_train(message):
-    current_language = get_current_language(pool, message.chat.id)
+    current_language = db_model.get_current_language(pool, message.chat.id)
     if current_language is None:
         handle_language_not_set(message)
         return
@@ -803,7 +808,10 @@ def process_choose_group_for_training(message, session_info, messages):
         bot.reply_to(message, texts.training_cancelled, reply_markup=empty_markup)
         return
         
-    groups = get_group_by_name(pool, message.chat.id, session_info["language"], message.text)
+    groups = db_model.get_group_by_name(
+        pool, message.chat.id,
+        session_info["language"], message.text
+    )
     if len(groups) == 0:
         bot.reply_to(message, texts.no_such_group.format("/train"),
                      reply_markup=empty_markup)
@@ -974,11 +982,11 @@ def get_train_step(message, words, session_info, step, scores):
     if step == len(words): # training complete
         # TODO: different messages for different results
         if session_info["hints"] == "no hints":
-            set_training_scores(
+            db_model.set_training_scores(
                 pool, message.chat.id, session_info["session_id"],
                 list(range(1, len(words) + 1)), scores
             )
-            update_final_scores(pool, message.chat.id, session_info)
+            db_model.update_final_scores(pool, message.chat.id, session_info)
         else:
             bot.send_message(
                 message.chat.id, texts.training_no_scores
@@ -1022,16 +1030,16 @@ def process_choose_hints(message, session_info, messages):
         return
     
     session_info["hints"] = message.text
-    session_info["session_id"] = get_new_session_id()
+    session_info["session_id"] = db_model.get_current_time()
     messages.append(message)
     
-    init_training_session(pool, message.chat.id, session_info)
+    db_model.init_training_session(pool, message.chat.id, session_info)
     if session_info["strategy"] != "group":
-        create_training_session(pool, message.chat.id, session_info)
+        db_model.create_training_session(pool, message.chat.id, session_info)
     else:
-        create_group_training_session(pool, message.chat.id, session_info)
+        db_model.create_group_training_session(pool, message.chat.id, session_info)
     
-    words = get_training_words(pool, message.chat.id, session_info)
+    words = db_model.get_training_words(pool, message.chat.id, session_info)
     
     if len(words) == 0:
         bot.send_message(
