@@ -9,51 +9,17 @@ from telebot import types
 import ydb
 
 import database.model as db_model
+from database.ydb_settings import pool
 from logs import logger, logged_execution, CallbackLogger
-import texts
+import user_interaction.config as config
+import user_interaction.options as options
+import user_interaction.texts as texts
 from word import compare_user_input_with_db, get_translation, get_word, get_overall_score, get_total_trains, format_word_for_listing
 from word import format_word_for_group_action, get_word_from_group_action
 
 
 bot = telebot.TeleBot(os.environ.get("BOT_TOKEN"))
 empty_markup = types.ReplyKeyboardRemove()
-
-# TODO: move constants to a separate file
-
-
-# YDB initializing
-ydb_driver_config = ydb.DriverConfig(
-    os.getenv("YDB_ENDPOINT"), os.getenv("YDB_DATABASE"),
-    credentials=ydb.credentials_from_env_variables(),
-    root_certificates=ydb.load_ydb_root_certificate(),
-)
-
-ydb_driver = ydb.Driver(ydb_driver_config)
-ydb_driver.wait(fail_fast=True, timeout=30)
-pool = ydb.SessionPool(ydb_driver)
-
-
-# CONSTANTS
-TRAIN_STRATEGY_OPTIONS = ["random", "new", "bad", "group"]
-TRAIN_DIRECTION_OPTIONS = {"➡️ㅤ": "to", "⬅️ㅤ": "from"}  # invisible symbols to avoid large emoji
-TRAIN_COUNT_OPTIONS = ["10", "20", "All"]
-TRAIN_HINTS_OPTIONS = ["flashcards", "test", "a****z", "no hints"]
-TRAIN_MAX_N_WORDS = 9999;
-TRAIN_CORRECT_ANSWER = "✅ㅤ" # invisible symbol to avoid large emoji
-TRAIN_WRONG_ANSWER = "❌ {}"
-SHOW_WORDS_SORT_OPTIONS = [
-    "a-z", "z-a", "score ⬇️", "score ⬆️",
-    "n trains ⬇️", "n trains ⬆️", "time added ⬇️", "time added ⬆️"
-]
-GROUP_ADD_WORDS_SORT_OPTIONS = ["a-z", "time added ⬇️"]
-GROUP_ADD_WORDS_PREFIXES = {
-    0: "🖤",
-    1: "💚",
-}
-DELETE_ARE_YOU_SURE = {
-    "Yes!": True,
-    "No..": False,
-}
 
 
 ###################
@@ -70,8 +36,11 @@ def handle_help(message):
 @bot.message_handler(commands=["forget_me"])
 @logged_execution
 def handle_forget_me(message):
-    markup = types.ReplyKeyboardMarkup(row_width=len(DELETE_ARE_YOU_SURE), resize_keyboard=True, one_time_keyboard=True)
-    markup.add(*DELETE_ARE_YOU_SURE.keys(), row_width=len(DELETE_ARE_YOU_SURE))
+    markup = types.ReplyKeyboardMarkup(
+        row_width=len(options.delete_are_you_sure),
+        resize_keyboard=True, one_time_keyboard=True
+    )
+    markup.add(*options.delete_are_you_sure.keys(), row_width=len(options.delete_are_you_sure))
     bot.send_message(message.chat.id, texts.forget_me_message, reply_markup=markup)
     bot.register_next_step_handler(message, CallbackLogger(process_forget_me))
 
@@ -196,7 +165,7 @@ def handle_show_words(message):
     
     # TODO: make all keyboards one time
     markup = types.ReplyKeyboardMarkup(row_width=3, resize_keyboard=True, one_time_keyboard=True)
-    markup.add(*SHOW_WORDS_SORT_OPTIONS, row_width=2)
+    markup.add(*options.show_words_sort_options, row_width=2)
     markup.add(telebot.types.KeyboardButton("/exit"))
     
     reply_message = bot.send_message(message.chat.id, texts.choose_sorting, reply_markup=markup)
@@ -210,7 +179,7 @@ def process_choose_word_sort(message, words, original_command):
     if message.text == "/exit":
         bot.reply_to(message, texts.exited, reply_markup=empty_markup)
         return
-    if message.text not in SHOW_WORDS_SORT_OPTIONS:
+    if message.text not in options.show_words_sort_options:
         bot.reply_to(message, texts.sorting_not_supported.format(original_command), reply_markup=empty_markup)
         return
     
@@ -302,8 +271,11 @@ def handle_delete_language(message):
         handle_language_not_set(message)
         return
     
-    markup = types.ReplyKeyboardMarkup(row_width=len(DELETE_ARE_YOU_SURE), resize_keyboard=True, one_time_keyboard=True)
-    markup.add(*DELETE_ARE_YOU_SURE.keys(), row_width=len(DELETE_ARE_YOU_SURE))
+    markup = types.ReplyKeyboardMarkup(
+        row_width=len(options.delete_are_you_sure),
+        resize_keyboard=True, one_time_keyboard=True
+    )
+    markup.add(*options.delete_are_you_sure.keys(), row_width=len(options.delete_are_you_sure))
     bot.send_message(
         message.chat.id,
         texts.delete_language_warning.format(language),
@@ -429,8 +401,11 @@ def process_group_deletion_check_sure(message, language):
     group_id = groups[0]["group_id"].decode("utf-8")
     group_name = groups[0]["group_name"].decode("utf-8")
     
-    markup = types.ReplyKeyboardMarkup(row_width=len(DELETE_ARE_YOU_SURE), resize_keyboard=True, one_time_keyboard=True)
-    markup.add(*DELETE_ARE_YOU_SURE.keys(), row_width=len(DELETE_ARE_YOU_SURE))
+    markup = types.ReplyKeyboardMarkup(
+        row_width=len(options.delete_are_you_sure),
+        resize_keyboard=True, one_time_keyboard=True
+    )
+    markup.add(*options.delete_are_you_sure.keys(), row_width=len(options.delete_are_you_sure))
     bot.send_message(
         message.chat.id,
         texts.delete_group_warning.format(group_name, language),
@@ -446,12 +421,12 @@ def process_group_deletion_check_sure(message, language):
 
 def process_group_deletion(message, language, group_id, group_name, is_creator):
     # TODO: when sharing think of local / global deletions (use is_creator)
-    if message.text not in DELETE_ARE_YOU_SURE:
+    if message.text not in options.delete_are_you_sure:
         bot.reply_to(message, texts.unknown_command.format("/delete_group"),
                     reply_markup=empty_markup)
         return
     
-    if not DELETE_ARE_YOU_SURE[message.text]:
+    if not options.delete_are_you_sure[message.text]:
         bot.send_message(
             message.chat.id, texts.delete_group_cancel,
             reply_markup=empty_markup
@@ -516,7 +491,7 @@ def get_keyboard_markup(choices, mask, additional_commands=[], row_width=2):
         
     formatted_choices = [
         "{}{}".format(
-            GROUP_ADD_WORDS_PREFIXES[mask],
+            options.group_add_words_prefixes[mask],
             format_word_for_group_action(entry),
         ) for entry, mask in zip(choices, mask)
     ]
@@ -683,7 +658,7 @@ def process_choose_group_to_add_words(message, language):
         return
     
     markup = types.ReplyKeyboardMarkup(row_width=4, one_time_keyboard=True, resize_keyboard=True)
-    markup.add(*GROUP_ADD_WORDS_SORT_OPTIONS, row_width=4)
+    markup.add(*options.group_add_words_sort_options, row_width=4)
     markup.add(telebot.types.KeyboardButton("/exit"))
     
     reply_message = bot.send_message(message.chat.id, texts.choose_sorting, reply_markup=markup)
@@ -699,7 +674,7 @@ def process_choose_sorting_to_add_words(message, language, group_id, group_name,
         bot.reply_to(message, texts.exited, reply_markup=empty_markup)
         return
     
-    if message.text not in GROUP_ADD_WORDS_SORT_OPTIONS:
+    if message.text not in options.group_add_words_sort_options:
         bot.reply_to(message, texts.sorting_not_supported.format("/group_add_words"), reply_markup=empty_markup)
         return
     
@@ -772,7 +747,7 @@ def handle_train(message):
         return
 
     markup = types.ReplyKeyboardMarkup(row_width=4, one_time_keyboard=True, resize_keyboard=True)
-    markup.add(*TRAIN_STRATEGY_OPTIONS, row_width=4)
+    markup.add(*options.train_strategy_options, row_width=4)
     markup.add(telebot.types.KeyboardButton("/cancel"))
     reply_message = bot.send_message(
         message.chat.id,
@@ -788,8 +763,14 @@ def handle_train(message):
 
 
 def init_direction_choice(message, session_info, messages):
-    markup = types.ReplyKeyboardMarkup(row_width=len(TRAIN_DIRECTION_OPTIONS), one_time_keyboard=True, resize_keyboard=True)
-    markup.add(*list(TRAIN_DIRECTION_OPTIONS.keys()), row_width=len(TRAIN_DIRECTION_OPTIONS))
+    markup = types.ReplyKeyboardMarkup(
+        row_width=len(options.train_direction_options),
+        one_time_keyboard=True, resize_keyboard=True
+    )
+    markup.add(
+        *list(options.train_direction_options.keys()),
+        row_width=len(options.train_direction_options)
+    )
     markup.add(telebot.types.KeyboardButton("/cancel"))
     reply_message = bot.send_message(
         message.chat.id,
@@ -829,7 +810,7 @@ def process_choose_strategy(message, session_info, messages):
     if message.text == "/cancel":
         bot.reply_to(message, texts.training_cancelled, reply_markup=empty_markup)
         return
-    if message.text not in TRAIN_STRATEGY_OPTIONS:
+    if message.text not in options.train_strategy_options:
         bot.reply_to(message, texts.training_strategy_unknown, reply_markup=empty_markup)
         return
     session_info["strategy"] = message.text
@@ -850,19 +831,25 @@ def process_choose_direction(message, session_info, messages):
     if message.text == "/cancel":
         bot.reply_to(message, texts.training_cancelled, reply_markup=empty_markup)
         return
-    if message.text not in TRAIN_DIRECTION_OPTIONS.keys():
+    if message.text not in options.train_direction_options.keys():
         bot.reply_to(message, texts.training_direction_unknown, reply_markup=empty_markup)
         return
 
-    markup = types.ReplyKeyboardMarkup(row_width=len(TRAIN_COUNT_OPTIONS), one_time_keyboard=True, resize_keyboard=True)
-    markup.add(*TRAIN_COUNT_OPTIONS, row_width=len(TRAIN_COUNT_OPTIONS))
+    markup = types.ReplyKeyboardMarkup(
+        row_width=len(options.train_duration_options),
+        one_time_keyboard=True, resize_keyboard=True
+    )
+    markup.add(
+        *options.train_duration_options,
+        row_width=len(options.train_duration_options)
+    )
     markup.add(telebot.types.KeyboardButton("/cancel"))
     reply_message = bot.send_message(
         message.chat.id,
         texts.training_duration,
         reply_markup=markup
     )
-    session_info["direction"] = TRAIN_DIRECTION_OPTIONS[message.text]
+    session_info["direction"] = options.train_direction_options[message.text]
     messages.extend([message, reply_message])
     bot.register_next_step_handler(
         reply_message, CallbackLogger(process_choose_duration),
@@ -874,19 +861,22 @@ def process_choose_duration(message, session_info, messages):
     if message.text == "/cancel":
         bot.reply_to(message, texts.training_cancelled, reply_markup=empty_markup)
         return
-    if not message.text.isdigit() and message.text not in TRAIN_COUNT_OPTIONS:
+    if not message.text.isdigit() and message.text not in options.train_duration_options:
         bot.reply_to(message, texts.training_duration_unknown, reply_markup=empty_markup)
         return
 
-    markup = types.ReplyKeyboardMarkup(row_width=len(TRAIN_HINTS_OPTIONS), one_time_keyboard=True, resize_keyboard=True)
-    markup.add(*TRAIN_HINTS_OPTIONS, row_width=len(TRAIN_HINTS_OPTIONS))
+    markup = types.ReplyKeyboardMarkup(
+        row_width=len(options.train_hints_options),
+        one_time_keyboard=True, resize_keyboard=True
+    )
+    markup.add(*options.train_hints_options, row_width=len(options.train_hints_options))
     markup.add(telebot.types.KeyboardButton("/cancel"))
     reply_message = bot.send_message(
         message.chat.id,
         texts.training_hints,
         reply_markup=markup
     )
-    session_info["duration"] = int(message.text) if message.text.isdigit() else TRAIN_MAX_N_WORDS
+    session_info["duration"] = int(message.text) if message.text.isdigit() else config.TRAIN_MAX_N_WORDS
     messages.extend([message, reply_message])
     bot.register_next_step_handler(
         reply_message, CallbackLogger(process_choose_hints),
@@ -967,13 +957,13 @@ def get_train_step(message, words, session_info, step, scores):
         if is_correct:
             bot.send_message(
                 message.chat.id,
-                TRAIN_CORRECT_ANSWER,
+                texts.train_correct_answer,
                 reply_markup=empty_markup
             )
         else:
             bot.send_message(
                 message.chat.id,
-                TRAIN_WRONG_ANSWER.format(
+                texts.train_wrong_answer.format(
                     get_translation(word, session_info["direction"])
                 ),
                 reply_markup=empty_markup
@@ -1024,7 +1014,7 @@ def process_choose_hints(message, session_info, messages):
     if message.text == "/cancel":
         bot.reply_to(message, texts.training_cancelled, reply_markup=empty_markup)
         return
-    if message.text not in TRAIN_HINTS_OPTIONS:
+    if message.text not in options.train_hints_options:
         bot.reply_to(message, texts.training_hints_unknown,
                     reply_markup=empty_markup)
         return
@@ -1058,7 +1048,7 @@ def process_choose_hints(message, session_info, messages):
         ),
         reply_markup=empty_markup
     )
-    if len(words) < session_info["duration"] and session_info["duration"] != TRAIN_MAX_N_WORDS:
+    if len(words) < session_info["duration"] and session_info["duration"] != config.TRAIN_MAX_N_WORDS:
         bot.send_message(
             message.chat.id,
             texts.training_fewer_words,

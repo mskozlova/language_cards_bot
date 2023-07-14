@@ -196,3 +196,7 @@ training_start = (
     "Strategy: {}\nDuration: {}\nDirection: {}\nHints: {}{}"
 )
 training_start_group = "\n\nGroup name: {}"
+
+# train reactions
+train_correct_answer = "✅ㅤ" # invisible symbol to avoid large emoji
+train_wrong_answer = "❌ {}"
