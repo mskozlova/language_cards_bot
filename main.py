@@ -1058,11 +1058,18 @@ def process_choose_hints(message, session_info, messages):
     for m in messages:
         bot.delete_message(message.chat.id, m.id)
     get_train_step(message=message, words=words, session_info=session_info, step=0, scores=[])
-    
+
+
+@bot.message_handler()
+@logged_execution
+def handle_any(message):
+    bot.reply_to(message, "I don't know what this is :(")
+
 
 ##################
 # Running the bot
 ##################
 if __name__ == "__main__":
+    logger.warning("if __name__ == __main__")
     bot.remove_webhook()
     bot.polling()
