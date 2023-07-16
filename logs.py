@@ -16,8 +16,12 @@ class YcLoggingFormatter(jsonlogger.JsonFormatter):
 logHandler = logging.StreamHandler()
 logHandler.setFormatter(YcLoggingFormatter("%(message)s %(level)s %(logger)s"))
 
+loggers = [logging.getLogger(name) for name in logging.root.manager.loggerDict]
+for logger in loggers:
+    logger.setLevel(logging.DEBUG)
+
 logger = logging.getLogger("logger")
-logger.propagate = False
+logger.propagate = True
 logger.addHandler(logHandler)
 logger.setLevel(logging.DEBUG)
 
