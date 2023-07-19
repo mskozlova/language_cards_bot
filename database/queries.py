@@ -5,23 +5,41 @@ GROUPS_CONTENTS_TABLE_PATH = "group_contents"
 LANGUAGES_TABLE_PATH = "languages"
 TRAINING_SESSIONS_TABLE_PATH = "training_sessions"
 TRAINING_SESSIONS_INFO_TABLE_PATH = "training_session_info"
+STATES_TABLE_PATH = "user_states"
     
 
+# TODO: make all chat_ids Int64, because of channels
 create_user = f"""
-    DECLARE $chat_id AS Uint64;
+    DECLARE $chat_id AS Int64;
 
     INSERT INTO `{USERS_TABLE_PATH}` (chat_id) VALUES ($chat_id);
 """
 
 get_user_info = f"""
-    DECLARE $chat_id AS Uint64;
+    DECLARE $chat_id AS Int64;
     
     SELECT * FROM `{USERS_TABLE_PATH}`
     WHERE chat_id == $chat_id;
 """
 
+get_user_state = f"""
+    DECLARE $chat_id AS Int64;
+
+    SELECT state
+    FROM `{STATES_TABLE_PATH}`
+    WHERE chat_id == $chat_id;
+"""
+
+set_user_state = f"""
+    DECLARE $chat_id AS Int64;
+    DECLARE $state AS Utf8?;
+
+    UPSERT INTO `{STATES_TABLE_PATH}` (`chat_id`, `state`) VALUES
+        ($chat_id, $state);
+"""
+
 delete_user = f"""
-    DECLARE $chat_id AS Uint64;
+    DECLARE $chat_id AS Int64;
 
     $groups = (
         SELECT group_id
@@ -45,6 +63,9 @@ delete_user = f"""
 
     DELETE FROM `{TRAINING_SESSIONS_TABLE_PATH}`
     WHERE chat_id == $chat_id;
+    
+    DELETE FROM `{STATES_TABLE_PATH}`
+    WHERE chat_id == $chat_id;
 
     DELETE FROM `{GROUPS_TABLE_PATH}`
     WHERE
@@ -58,7 +79,7 @@ delete_user = f"""
 """
 
 delete_language = f"""
-    DECLARE $chat_id AS Uint64;
+    DECLARE $chat_id AS Int64;
     DECLARE $language AS String;
 
     $groups = (
@@ -119,14 +140,14 @@ delete_language = f"""
 """
 
 get_user_vocabs = f"""
-    DECLARE $chat_id AS Uint64;
+    DECLARE $chat_id AS Int64;
     
     SELECT * FROM `{VOCABS_TABLE_PATH}`
     WHERE chat_id == $chat_id
 """
 
 get_full_vocab = f"""
-    DECLARE $chat_id AS Uint64;
+    DECLARE $chat_id AS Int64;
     DECLARE $language AS String;
     
     SELECT
@@ -143,9 +164,8 @@ get_full_vocab = f"""
         AND language == $language
 """
 
-# TODO: check if list is ok
 get_words_from_vocab = f"""
-    DECLARE $chat_id AS Uint64;
+    DECLARE $chat_id AS Int64;
     DECLARE $language AS String;
     DECLARE $words AS List<Utf8>;
      
@@ -157,7 +177,7 @@ get_words_from_vocab = f"""
 """
 
 delete_words_from_vocab = f"""
-    DECLARE $chat_id AS Uint64;
+    DECLARE $chat_id AS Int64;
     DECLARE $language AS String;
     DECLARE $words AS List<Utf8>;
      
@@ -169,7 +189,7 @@ delete_words_from_vocab = f"""
 """
 
 update_current_lang = f"""
-    DECLARE $chat_id AS Uint64;
+    DECLARE $chat_id AS Int64;
     DECLARE $language AS String;
 
     UPDATE `{USERS_TABLE_PATH}`
@@ -178,7 +198,7 @@ update_current_lang = f"""
 """
 
 get_available_languages = f"""
-    DECLARE $chat_id AS Uint64;
+    DECLARE $chat_id AS Int64;
 
     SELECT language
     FROM `{LANGUAGES_TABLE_PATH}`
@@ -186,7 +206,7 @@ get_available_languages = f"""
 """
 
 user_add_language = f"""
-    DECLARE $chat_id AS Uint64;
+    DECLARE $chat_id AS Int64;
     DECLARE $language AS Utf8;
     
     INSERT INTO `{LANGUAGES_TABLE_PATH}` (`chat_id`, `language`) VALUES
@@ -194,7 +214,7 @@ user_add_language = f"""
 """
 
 get_current_language = f"""
-    DECLARE $chat_id AS Uint64;
+    DECLARE $chat_id AS Int64;
 
     SELECT current_lang
     FROM `{USERS_TABLE_PATH}`
@@ -202,7 +222,7 @@ get_current_language = f"""
 """
 
 init_training_session = f"""
-    DECLARE $chat_id AS Uint64;
+    DECLARE $chat_id AS Int64;
     DECLARE $session_id AS Uint64;
     DECLARE $strategy AS String;
     DECLARE $language AS Utf8;
@@ -220,7 +240,7 @@ init_training_session = f"""
 """
 
 get_session_info = f"""
-    DECLARE $chat_id AS Uint64;
+    DECLARE $chat_id AS Int64;
     DECLARE $session_id AS Uint64;
     
     SELECT *
@@ -229,7 +249,7 @@ get_session_info = f"""
 """
 
 create_training_session = f"""
-    DECLARE $chat_id AS Uint64;
+    DECLARE $chat_id AS Int64;
     DECLARE $session_id AS Uint64;
     DECLARE $language AS Utf8;
     DECLARE $direction AS String;
@@ -269,7 +289,7 @@ create_training_session = f"""
 """
 
 create_group_training_session = f"""
-    DECLARE $chat_id AS Uint64;
+    DECLARE $chat_id AS Int64;
     DECLARE $session_id AS Uint64;
     DECLARE $language AS Utf8;
     DECLARE $duration AS Uint64;
@@ -300,7 +320,7 @@ create_group_training_session = f"""
 """
 
 get_training_words = f"""
-    DECLARE $chat_id AS Uint64;
+    DECLARE $chat_id AS Int64;
     DECLARE $session_id AS Uint64;
 
     SELECT * FROM `{TRAINING_SESSIONS_TABLE_PATH}`
@@ -310,9 +330,8 @@ get_training_words = f"""
     ORDER BY word_idx;
 """
 
-# TODO: check if lists work
 set_training_scores = f"""
-    DECLARE $chat_id AS Uint64;
+    DECLARE $chat_id AS Int64;
     DECLARE $session_id AS Uint64;
     DECLARE $word_idxs AS List<Uint32>;
     DECLARE $scores AS List<Uint32>;
@@ -335,7 +354,7 @@ set_training_scores = f"""
 """
 
 update_final_scores = f"""
-    DECLARE $chat_id AS Uint64;
+    DECLARE $chat_id AS Int64;
     DECLARE $session_id AS Uint64;
     DECLARE $language AS Utf8;
     DECLARE $direction AS String;
@@ -389,7 +408,7 @@ update_final_scores = f"""
 """
 
 get_group_by_name = f"""
-    DECLARE $chat_id AS Uint64;
+    DECLARE $chat_id AS Int64;
     DECLARE $language AS Utf8;
     DECLARE $group_name AS String;
 
@@ -402,7 +421,7 @@ get_group_by_name = f"""
 """
 
 add_group = f"""
-    DECLARE $chat_id AS Uint64;
+    DECLARE $chat_id AS Int64;
     DECLARE $language AS Utf8;
     DECLARE $group_id AS String;
     DECLARE $group_name AS String;
@@ -424,7 +443,7 @@ delete_group = f"""
 """
 
 get_all_groups = f"""
-    DECLARE $chat_id AS Uint64;
+    DECLARE $chat_id AS Int64;
     DECLARE $language AS Utf8;
     
     SELECT group_name, group_id FROM `{GROUPS_TABLE_PATH}`
@@ -454,7 +473,7 @@ get_group_contents = f"""
 """
 
 bulk_update_words = f"""
-    DECLARE $chat_id AS Uint64;
+    DECLARE $chat_id AS Int64;
     DECLARE $language AS String;
     DECLARE $words AS List<Utf8>;
     DECLARE $translations AS List<Utf8>;
@@ -487,7 +506,7 @@ bulk_update_words = f"""
 """
 
 bulk_update_group = f"""
-    DECLARE $chat_id AS Uint64;
+    DECLARE $chat_id AS Int64;
     DECLARE $language AS String;
     DECLARE $group_id AS String;
     DECLARE $words AS List<Utf8>;
@@ -509,7 +528,7 @@ bulk_update_group = f"""
 """
 
 bulk_update_group_delete = f"""
-    DECLARE $chat_id AS Uint64;
+    DECLARE $chat_id AS Int64;
     DECLARE $language AS String;
     DECLARE $group_id AS String;
     DECLARE $words AS List<Utf8>;
