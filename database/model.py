@@ -1,4 +1,5 @@
 import datetime
+import json
 
 import database.queries as queries
 from database.utils import execute_update_query, execute_select_query
@@ -12,8 +13,33 @@ def get_current_time():
     return int(datetime.datetime.timestamp(datetime.datetime.now()))
 
 
+def get_state(pool, chat_id):
+    results = execute_select_query(pool, queries.get_user_state, chat_id=chat_id)
+    if len(results) == 0:
+        return None
+    if results[0]["state"] is None:
+        return None
+    return json.loads(results[0]["state"])
+
+
+def set_state(pool, chat_id, state):
+    execute_update_query(
+        pool, queries.set_user_state,
+        chat_id=chat_id,
+        state=json.dumps(state)
+    )
+
+
+def clear_state(pool, chat_id):
+    execute_update_query(
+        pool, queries.set_user_state,
+        chat_id=chat_id,
+        state=None
+    )
+
+
 def create_user(pool, chat_id):
-    return execute_update_query(pool, queries.create_user, chat_id=chat_id)
+    execute_update_query(pool, queries.create_user, chat_id=chat_id)
 
 
 def get_user_info(pool, chat_id):
@@ -40,11 +66,11 @@ def update_vocab(pool, chat_id, language, words, translations):
 
 
 def delete_user(pool, chat_id):
-    return execute_update_query(pool, queries.delete_user, chat_id=chat_id)
+    execute_update_query(pool, queries.delete_user, chat_id=chat_id)
 
 
 def delete_language(pool, chat_id, language):
-    return execute_update_query(
+    execute_update_query(
         pool, queries.delete_language,
         chat_id=chat_id, language=language.encode()
     )
@@ -71,7 +97,7 @@ def get_words_from_vocab(pool, chat_id, language, words):
 
 
 def delete_words_from_vocab(pool, chat_id, language, words):
-    return execute_update_query(
+    execute_update_query(
         pool, queries.delete_words_from_vocab,
         chat_id=chat_id,
         language=language.encode(),
@@ -80,7 +106,7 @@ def delete_words_from_vocab(pool, chat_id, language, words):
 
 
 def update_current_lang(pool, chat_id, language):
-    return execute_update_query(
+    execute_update_query(
         pool, queries.update_current_lang,
         chat_id=chat_id,
         language=language.encode()
@@ -96,7 +122,7 @@ def get_available_languages(pool, chat_id):
 
 
 def user_add_language(pool, chat_id, language):
-    return execute_update_query(
+    execute_update_query(
         pool, queries.user_add_language,
         chat_id=chat_id,
         language=language.encode()
@@ -112,7 +138,7 @@ def get_current_language(pool, chat_id):
 
 
 def init_training_session(pool, chat_id, session_info):
-    return execute_update_query(
+    execute_update_query(
         pool, queries.init_training_session,
         chat_id=chat_id,
         session_id=session_info["session_id"],
@@ -133,7 +159,7 @@ def get_session_info(pool, chat_id, session_id):
 
 
 def create_training_session(pool, chat_id, session_info):
-    return execute_update_query(
+    execute_update_query(
         pool, queries.create_training_session,
         chat_id=chat_id,
         session_id=session_info["session_id"],
@@ -145,7 +171,7 @@ def create_training_session(pool, chat_id, session_info):
 
 
 def create_group_training_session(pool, chat_id, session_info):
-    return execute_update_query(
+    execute_update_query(
         pool, queries.create_group_training_session,
         chat_id=chat_id,
         session_id=session_info["session_id"],
@@ -164,7 +190,7 @@ def get_training_words(pool, chat_id, session_info):
 
 
 def set_training_scores(pool, chat_id, session_id, word_idxs, scores):
-    return execute_update_query(
+    execute_update_query(
         pool, queries.set_training_scores,
         chat_id=chat_id,
         session_id=session_id,
@@ -174,7 +200,7 @@ def set_training_scores(pool, chat_id, session_id, word_idxs, scores):
 
 
 def update_final_scores(pool, chat_id, session_info):
-    return execute_update_query(
+    execute_update_query(
         pool, queries.update_final_scores,
         chat_id=chat_id,
         session_id=session_info["session_id"],
@@ -193,7 +219,7 @@ def get_group_by_name(pool, chat_id, language, group_name):
 
 
 def add_group(pool, chat_id, language, group_name, group_id, is_creator):
-    return execute_update_query(
+    execute_update_query(
         pool, queries.add_group,
         chat_id=chat_id,
         language=language.encode(),
@@ -204,7 +230,7 @@ def add_group(pool, chat_id, language, group_name, group_id, is_creator):
 
 
 def delete_group(pool, group_id):
-    return execute_update_query(
+    execute_update_query(
         pool, queries.delete_group,
         group_id=group_id.encode()
     )
