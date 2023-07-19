@@ -110,7 +110,13 @@ sorting_not_supported = "This sorting is not supported. Try again {}"
 # misc
 exited = "Exited!"
 
+unknown_command_short = "I don't know this command."
+
 unknown_command = "I don't know this command, try again {}"
+
+cancel_short = "Cancelled!"
+
+unknown_message = "I don't know what to do :("
 
 # show words
 no_more_words = "This is all the words we have!"

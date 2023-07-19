@@ -2,7 +2,7 @@ import logging
 import traceback
 
 from pythonjsonlogger import jsonlogger
-from telebot.types import Message
+from telebot.types import CallbackQuery, Message
 
 
 # https://cloud.yandex.com/en/docs/functions/operations/function/logs-write#function-examples
@@ -44,9 +44,15 @@ def get_message_info(*args, **kwargs):
     if find_in_args(args, Message) is not None:
         message = find_in_args(args, Message)
         chat_id, text = message.chat.id, message.text
+    elif find_in_args(args, CallbackQuery):
+        call = find_in_args(args, CallbackQuery)
+        chat_id, text = call.message.chat.id, call.message.text
     elif find_in_kwargs(kwargs, Message) is not None:
         message = find_in_kwargs(args, Message)
-        chat_id, text = message.chat.id, message.text  
+        chat_id, text = message.chat.id, message.text
+    elif find_in_kwargs(kwargs, CallbackQuery):
+        call = find_in_kwargs(kwargs, CallbackQuery)
+        chat_id, text = call.message.chat.id, call.message.text
     
     return chat_id, text
 

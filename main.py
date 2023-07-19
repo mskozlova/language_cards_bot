@@ -5,9 +5,11 @@ import random
 import re
 
 import telebot
+from telebot import custom_filters
 from telebot import types
-import ydb
 
+import bot.states as bot_states
+import bot.handlers as handlers
 import database.model as db_model
 from database.ydb_settings import pool
 from logs import logger, logged_execution, CallbackLogger
@@ -18,7 +20,8 @@ from word import compare_user_input_with_db, get_translation, get_word, get_over
 from word import format_word_for_group_action, get_word_from_group_action
 
 
-bot = telebot.TeleBot(os.environ.get("BOT_TOKEN"))
+state_storage = bot_states.StateYDBStorage(pool)
+bot = telebot.TeleBot(os.environ.get("BOT_TOKEN"), state_storage=state_storage)
 empty_markup = types.ReplyKeyboardRemove()
 
 
@@ -26,127 +29,27 @@ empty_markup = types.ReplyKeyboardRemove()
 # Command handlers
 ###################
 
-@bot.message_handler(commands=["help", "start"])
-@logged_execution
-def handle_help(message):
-    bot.send_message(message.chat.id, texts.help_message)
-    # TODO: /share_group, /add_group
 
+bot.register_message_handler(handlers.handle_help, commands=["help", "start"], pass_bot=True)
 
-@bot.message_handler(commands=["forget_me"])
-@logged_execution
-def handle_forget_me(message):
-    markup = types.ReplyKeyboardMarkup(
-        row_width=len(options.delete_are_you_sure),
-        resize_keyboard=True, one_time_keyboard=True
-    )
-    markup.add(*options.delete_are_you_sure.keys(), row_width=len(options.delete_are_you_sure))
-    bot.send_message(message.chat.id, texts.forget_me_message, reply_markup=markup)
-    bot.register_next_step_handler(message, CallbackLogger(process_forget_me))
+bot.register_message_handler(handlers.handle_forget_me, commands=["forget_me"], pass_bot=True)
+bot.register_message_handler(handlers.process_forget_me, state=bot_states.ForgetMeState.init, pass_bot=True)
 
+bot.register_message_handler(handlers.handle_set_language, commands=["set_language"], pass_bot=True)
+bot.register_message_handler(handlers.process_setting_language_cancel, commands=["cancel"],
+                             state=bot_states.SetLanguageState.init, pass_bot=True)
+bot.register_message_handler(handlers.process_setting_language,
+                             state=bot_states.SetLanguageState.init, pass_bot=True)
 
-def process_forget_me(message):
-    db_model.delete_user(pool, message.chat.id)
-    bot.send_message(message.chat.id, texts.forget_me_final)
+bot.register_message_handler(handlers.handle_add_words, commands=["add_words"], pass_bot=True)
+bot.register_message_handler(handlers.process_adding_words, state=bot_states.AddWordsState.add_words, pass_bot=True)
+bot.register_message_handler(handlers.process_word_translation_stop, commands=["stop"],
+                             state=bot_states.AddWordsState.translate, pass_bot=True)
+bot.register_message_handler(handlers.process_word_translation,
+                             state=bot_states.AddWordsState.translate, pass_bot=True)
 
-
-# TODO: check language name (same as group name)
-@bot.message_handler(commands=["set_language"])
-@logged_execution
-def handle_set_language(message):
-    language = db_model.get_current_language(pool, message.chat.id)
-    if language is not None:
-        bot.send_message(message.chat.id, texts.current_language.format(language))
-    
-    languages = db_model.get_available_languages(pool, message.chat.id)
-    
-    if len(languages) == 0:
-        bot.send_message(message.chat.id, texts.no_languages_yet)
-    else:
-        markup = types.ReplyKeyboardMarkup(row_width=3, resize_keyboard=True, one_time_keyboard=True)
-        markup.add(*languages, row_width=3)
-        markup.add(*["/cancel"])
-        bot.send_message(message.chat.id, texts.set_language, reply_markup=markup)
-    
-    bot.register_next_step_handler(message, CallbackLogger(process_setting_language), languages=set(languages))
-
-
-def process_setting_language(message, languages):
-    if message.text == "/cancel":
-        bot.send_message(message.chat.id, texts.set_language_cancel, reply_markup=empty_markup)
-        return
-    
-    language = message.text.lower().strip()
-    user_info = db_model.get_user_info(pool, message.chat.id)
-    
-    if len(user_info) == 0: # new user!
-        bot.send_message(message.chat.id, texts.welcome, reply_markup=empty_markup)
-        db_model.create_user(pool, message.chat.id)
-        
-    if language not in languages:
-        bot.send_message(
-            message.chat.id,
-            texts.new_language_created.format(language),
-            reply_markup=empty_markup
-        )
-        db_model.user_add_language(pool, message.chat.id, language)
-    
-    db_model.update_current_lang(pool, message.chat.id, language)
-    bot.send_message(message.chat.id, texts.language_is_set.format(language), reply_markup=empty_markup)
-
-
-def handle_language_not_set(message):
+def handle_language_not_set(message, bot):
     bot.send_message(message.chat.id, texts.no_language_is_set)
-
-
-# TODO: manage possible timeout
-# TODO: not allow any special characters apart from "-"
-@bot.message_handler(commands=["add_words"])
-@logged_execution
-def handle_add_words(message):
-    language = db_model.get_current_language(pool, message.chat.id)
-    if language is None:
-        handle_language_not_set(message)
-        return
-    reply_message = bot.reply_to(message, texts.add_words_instruction_1)
-    bot.register_next_step_handler(reply_message, CallbackLogger(process_adding_words), language=language)
-
-
-def process_adding_words(message, language):
-    words = list(filter(
-        lambda x: len(x) > 0,
-        [w.strip().lower() for w in message.text.split("\n")]
-    ))
-    if len(words) == 0:
-        bot.reply_to(message, texts.add_words_none_added)
-        return
-    bot.reply_to(message, texts.add_words_instruction_2.format(words))
-    translation_message = bot.send_message(
-        message.chat.id,
-        texts.add_words_translate.format(words[0])
-    )
-    bot.register_next_step_handler(translation_message, CallbackLogger(process_word_translation),
-                                    language=language, words=words, translations=[])
-        
-
-def process_word_translation(message, language, words, translations):
-    if message.text != "/stop":
-        translations.append(json.dumps([m.strip().lower() for m in message.text.split("/")]))
-    else:
-        bot.send_message(message.chat.id, texts.add_words_cancelled)
-        return
-    
-    if len(translations) == len(words) or message.text == "/stop": # translation is over
-        db_model.update_vocab(pool, message.chat.id, language, words, translations)
-        bot.send_message(
-            message.chat.id, texts.add_words_finished.format(len(translations))
-        )
-    else:
-        translation_message = bot.send_message(
-            message.chat.id, words[len(translations)]
-        )
-        bot.register_next_step_handler(translation_message, CallbackLogger(process_word_translation),
-                                       language=language, words=words, translations=translations)
 
 
 # TODO: delete all unnecessary messages
@@ -1060,10 +963,9 @@ def process_choose_hints(message, session_info, messages):
     get_train_step(message=message, words=words, session_info=session_info, step=0, scores=[])
 
 
-@bot.message_handler()
-@logged_execution
-def handle_any(message):
-    bot.reply_to(message, "I don't know what this is :(")
+bot.register_message_handler(handlers.handle_unknown, pass_bot=True)
+
+bot.add_custom_filter(custom_filters.StateFilter(bot))
 
 
 ##################
@@ -1071,5 +973,4 @@ def handle_any(message):
 ##################
 if __name__ == "__main__":
     logger.warning("if __name__ == __main__")
-    bot.remove_webhook()
     bot.polling()
