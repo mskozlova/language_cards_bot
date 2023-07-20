@@ -118,6 +118,8 @@ cancel_short = "Cancelled!"
 
 unknown_message = "I don't know what to do :("
 
+stop_message = "Ok, stopped!"
+
 # show words
 no_more_words = "This is all the words we have!"
 

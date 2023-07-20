@@ -13,6 +13,7 @@ import bot.handlers as handlers
 import database.model as db_model
 from database.ydb_settings import pool
 from logs import logger, logged_execution, CallbackLogger
+import tests.handlers as test_handlers
 import user_interaction.config as config
 import user_interaction.options as options
 import user_interaction.texts as texts
@@ -29,6 +30,7 @@ empty_markup = types.ReplyKeyboardRemove()
 # Command handlers
 ###################
 
+bot.register_message_handler(handlers.handle_stop, state="*", commands=["stop"], pass_bot=True)
 
 bot.register_message_handler(handlers.handle_help, commands=["help", "start"], pass_bot=True)
 
@@ -48,109 +50,112 @@ bot.register_message_handler(handlers.process_word_translation_stop, commands=["
 bot.register_message_handler(handlers.process_word_translation,
                              state=bot_states.AddWordsState.translate, pass_bot=True)
 
+if os.getenv("IS_TESTING") is not None:
+    bot.register_message_handler(test_handlers.handle_clear_db, commands=["clear_db"], pass_bot=True)
+
 def handle_language_not_set(message, bot):
     bot.send_message(message.chat.id, texts.no_language_is_set)
 
 
 # TODO: delete all unnecessary messages
-@bot.message_handler(commands=["show_words"])
-@logged_execution
-def handle_show_words(message):
-    language = db_model.get_current_language(pool, message.chat.id)
-    if language is None:
-        handle_language_not_set(message)
-        return
+# @bot.message_handler(commands=["show_words"])
+# @logged_execution
+# def handle_show_words(message):
+#     language = db_model.get_current_language(pool, message.chat.id)
+#     if language is None:
+#         handle_language_not_set(message)
+#         return
 
-    vocab = db_model.get_full_vocab(pool, message.chat.id, language)
-    for word in vocab:
-        word["score"] = get_overall_score(word)
-        word["n_trains"] = get_total_trains(word)
+#     vocab = db_model.get_full_vocab(pool, message.chat.id, language)
+#     for word in vocab:
+#         word["score"] = get_overall_score(word)
+#         word["n_trains"] = get_total_trains(word)
     
-    # TODO: make all keyboards one time
-    markup = types.ReplyKeyboardMarkup(row_width=3, resize_keyboard=True, one_time_keyboard=True)
-    markup.add(*options.show_words_sort_options, row_width=2)
-    markup.add(telebot.types.KeyboardButton("/exit"))
+#     # TODO: make all keyboards one time
+#     markup = types.ReplyKeyboardMarkup(row_width=3, resize_keyboard=True, one_time_keyboard=True)
+#     markup.add(*options.show_words_sort_options, row_width=2)
+#     markup.add(telebot.types.KeyboardButton("/exit"))
     
-    reply_message = bot.send_message(message.chat.id, texts.choose_sorting, reply_markup=markup)
-    bot.register_next_step_handler(
-        reply_message, CallbackLogger(process_choose_word_sort),
-        words=vocab, original_command="/show_words"
-    )
-
-
-def process_choose_word_sort(message, words, original_command):
-    if message.text == "/exit":
-        bot.reply_to(message, texts.exited, reply_markup=empty_markup)
-        return
-    if message.text not in options.show_words_sort_options:
-        bot.reply_to(message, texts.sorting_not_supported.format(original_command), reply_markup=empty_markup)
-        return
-    
-    # TODO: get rid of string constants
-    if message.text == "a-z":
-        words = sorted(words, key=lambda w: w["word"])
-    elif message.text == "z-a":
-        words = sorted(words, key=lambda w: w["word"])[::-1]
-    elif message.text == "n trains ⬇️":
-        words = sorted(words, key=lambda w: w["n_trains"])[::-1]
-    elif message.text == "n trains ⬆️":
-        words = sorted(words, key=lambda w: w["n_trains"])
-    elif message.text == "time added ⬇️":
-        words = sorted(words, key=lambda w: w["added_timestamp"])[::-1]
-    elif message.text == "time added ⬆️":
-        words = sorted(words, key=lambda w: w["added_timestamp"])
-    elif message.text == "score ⬇️":
-        unknown_score = list(filter(lambda w: w["score"] is None, words))
-        known_score = list(filter(lambda w: w["score"] is not None, words))
-        words = sorted(known_score, key=lambda w: w["score"])[::-1]
-        words.extend(unknown_score)
-    elif message.text == "score ⬆️":
-        unknown_score = list(filter(lambda w: w["score"] is None, words))
-        known_score = list(filter(lambda w: w["score"] is not None, words))
-        words = sorted(known_score, key=lambda w: w["score"])
-        words.extend(unknown_score)
-    
-    CallbackLogger(process_show_words_batch)(
-        message, words=words,
-        batch_size=20, batch_number=0,
-        original_command="/show_words"
-    )
+#     reply_message = bot.send_message(message.chat.id, texts.choose_sorting, reply_markup=markup)
+#     bot.register_next_step_handler(
+#         reply_message, CallbackLogger(process_choose_word_sort),
+#         words=vocab, original_command="/show_words"
+#     )
 
 
-def process_show_words_batch(message, words, batch_size, batch_number, original_command):
-    if batch_number != 0:
-        if message.text == "/exit":
-            bot.send_message(message.chat.id, texts.exited, reply_markup=empty_markup)
-            return
-        if message.text != "/next":
-            bot.send_message(message.chat.id, texts.unknown_command.format(original_command),
-                            reply_markup=empty_markup)
-            return
+# def process_choose_word_sort(message, words, original_command):
+#     if message.text == "/exit":
+#         bot.reply_to(message, texts.exited, reply_markup=empty_markup)
+#         return
+#     if message.text not in options.show_words_sort_options:
+#         bot.reply_to(message, texts.sorting_not_supported.format(original_command), reply_markup=empty_markup)
+#         return
     
-    words_batch = words[batch_number * batch_size:(batch_number + 1) * batch_size]
-    words_formatted = [format_word_for_listing(word) for word in words_batch]
+#     # TODO: get rid of string constants
+#     if message.text == "a-z":
+#         words = sorted(words, key=lambda w: w["word"])
+#     elif message.text == "z-a":
+#         words = sorted(words, key=lambda w: w["word"])[::-1]
+#     elif message.text == "n trains ⬇️":
+#         words = sorted(words, key=lambda w: w["n_trains"])[::-1]
+#     elif message.text == "n trains ⬆️":
+#         words = sorted(words, key=lambda w: w["n_trains"])
+#     elif message.text == "time added ⬇️":
+#         words = sorted(words, key=lambda w: w["added_timestamp"])[::-1]
+#     elif message.text == "time added ⬆️":
+#         words = sorted(words, key=lambda w: w["added_timestamp"])
+#     elif message.text == "score ⬇️":
+#         unknown_score = list(filter(lambda w: w["score"] is None, words))
+#         known_score = list(filter(lambda w: w["score"] is not None, words))
+#         words = sorted(known_score, key=lambda w: w["score"])[::-1]
+#         words.extend(unknown_score)
+#     elif message.text == "score ⬆️":
+#         unknown_score = list(filter(lambda w: w["score"] is None, words))
+#         known_score = list(filter(lambda w: w["score"] is not None, words))
+#         words = sorted(known_score, key=lambda w: w["score"])
+#         words.extend(unknown_score)
     
-    if len(words_batch) == 0:
-        bot.send_message(message.chat.id, texts.no_more_words, reply_markup=empty_markup)
-        return
+#     CallbackLogger(process_show_words_batch)(
+#         message, words=words,
+#         batch_size=20, batch_number=0,
+#         original_command="/show_words"
+#     )
+
+
+# def process_show_words_batch(message, words, batch_size, batch_number, original_command):
+#     if batch_number != 0:
+#         if message.text == "/exit":
+#             bot.send_message(message.chat.id, texts.exited, reply_markup=empty_markup)
+#             return
+#         if message.text != "/next":
+#             bot.send_message(message.chat.id, texts.unknown_command.format(original_command),
+#                             reply_markup=empty_markup)
+#             return
     
-    n_pages = len(words) // batch_size
-    if len(words) % batch_size > 0:
-        n_pages += 1
+#     words_batch = words[batch_number * batch_size:(batch_number + 1) * batch_size]
+#     words_formatted = [format_word_for_listing(word) for word in words_batch]
+    
+#     if len(words_batch) == 0:
+#         bot.send_message(message.chat.id, texts.no_more_words, reply_markup=empty_markup)
+#         return
+    
+#     n_pages = len(words) // batch_size
+#     if len(words) % batch_size > 0:
+#         n_pages += 1
         
-    markup = types.ReplyKeyboardMarkup(row_width=2, resize_keyboard=True, one_time_keyboard=True)
-    markup.add(*["/exit", "/next"], row_width=2)
+#     markup = types.ReplyKeyboardMarkup(row_width=2, resize_keyboard=True, one_time_keyboard=True)
+#     markup.add(*["/exit", "/next"], row_width=2)
     
-    bot.send_message(
-        message.chat.id,
-        texts.word_formatted.format(batch_number + 1, n_pages, "\n".join(words_formatted)),
-        reply_markup=markup, parse_mode="MarkdownV2"
-    )
+#     bot.send_message(
+#         message.chat.id,
+#         texts.word_formatted.format(batch_number + 1, n_pages, "\n".join(words_formatted)),
+#         reply_markup=markup, parse_mode="MarkdownV2"
+#     )
     
-    bot.register_next_step_handler(
-        message, CallbackLogger(process_show_words_batch),
-        words=words, batch_size=batch_size, batch_number=batch_number+1, original_command=original_command
-    )
+#     bot.register_next_step_handler(
+#         message, CallbackLogger(process_show_words_batch),
+#         words=words, batch_size=batch_size, batch_number=batch_number+1, original_command=original_command
+#     )
 
 
 @bot.message_handler(commands=["show_current_language"])
@@ -961,7 +966,6 @@ def process_choose_hints(message, session_info, messages):
     for m in messages:
         bot.delete_message(message.chat.id, m.id)
     get_train_step(message=message, words=words, session_info=session_info, step=0, scores=[])
-
 
 bot.register_message_handler(handlers.handle_unknown, pass_bot=True)
 
