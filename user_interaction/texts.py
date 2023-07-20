@@ -78,7 +78,7 @@ add_words_instruction_1 = (
 
 add_words_instruction_2 = (
     "You've added {} words, now let's translate them one by one. "
-    "Type /stop anytime to exit the translation.\n"
+    "Type /cancel anytime to exit the translation.\n"
     "You can add multiple translations divided by '/', for example:\n"
     "> adiós\n"
     "farewell / goodbye"

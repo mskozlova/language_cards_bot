@@ -38,7 +38,7 @@ class CommandContext:
                 return False
             timer += sleep_s
             sleep(sleep_s)
-        self.logger.info(f"'{self.command}' failed due absence of reaction on step {self.step}")
+        self.logger.info(f"'{self.command}' failed due to absence of reaction on step {self.step}")
         return False
 
  
@@ -59,5 +59,25 @@ class CommandContext:
                 return False
             timer += sleep_s
             sleep(sleep_s)
-        self.logger.info(f"'{self.command}' failed due absence of reaction on step {self.step}")
+        self.logger.info(f"'{self.command}' failed due to absence of reaction on step {self.step}")
         return False
+
+
+    def expect_none(self, sleep_s=0.5, timeout_s=2):
+        timer = 0
+        while timer <= timeout_s:
+            response = self.client.get_messages(self.chat_id, self.message.id + self.step).text
+            if response is not None: # found target message
+                self.logger.info(f"'{self.command}' failed due to presence of reaction on step {self.step}",
+                                 f"\nreaction: {response}")
+                return False
+            
+            timer += sleep_s
+            sleep(sleep_s)
+        
+        self.logger.info(f"'{self.command}' step {self.step} passed successfuly!")
+        return True
+    
+    
+    def expect_length(self, num_rows, sleep_s=0.5, timeout_s=2):
+        raise NotImplementedError

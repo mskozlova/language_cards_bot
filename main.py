@@ -45,7 +45,7 @@ bot.register_message_handler(handlers.process_setting_language,
 
 bot.register_message_handler(handlers.handle_add_words, commands=["add_words"], pass_bot=True)
 bot.register_message_handler(handlers.process_adding_words, state=bot_states.AddWordsState.add_words, pass_bot=True)
-bot.register_message_handler(handlers.process_word_translation_stop, commands=["stop"],
+bot.register_message_handler(handlers.process_word_translation_stop, commands=["cancel"],
                              state=bot_states.AddWordsState.translate, pass_bot=True)
 bot.register_message_handler(handlers.process_word_translation,
                              state=bot_states.AddWordsState.translate, pass_bot=True)

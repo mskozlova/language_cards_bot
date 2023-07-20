@@ -8,3 +8,11 @@ for logger in logging.Logger.manager.loggerDict.values():
     logger.disabled = True
 
 logger = logging.getLogger("TestingLogger")
+
+
+def logged_test(func):
+    def wrapper(*args, **kwargs):
+        logger.info(f"Running test case {func.__name__.upper()}...")
+        func(*args, **kwargs)
+        logger.info("")
+    return wrapper

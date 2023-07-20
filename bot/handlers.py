@@ -117,7 +117,7 @@ def handle_language_not_set(message, bot):
 def handle_add_words(message: Message, bot: TeleBot):
     language = db_model.get_current_language(pool, message.chat.id)
     if language is None:
-        handle_language_not_set(message)
+        handle_language_not_set(message, bot)
         return
     
     bot.set_state(message.from_user.id, states.AddWordsState.add_words, message.chat.id)
