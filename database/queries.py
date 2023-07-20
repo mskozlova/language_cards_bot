@@ -8,7 +8,24 @@ TRAINING_SESSIONS_INFO_TABLE_PATH = "training_session_info"
 STATES_TABLE_PATH = "user_states"
     
 
-# TODO: make all chat_ids Int64, because of channels
+# Manage tables queries
+truncate_tables_queries = [
+    """
+    DELETE FROM `{}` ON SELECT * FROM `{}`
+    """.format(table_name, table_name)
+    for table_name in [
+        USERS_TABLE_PATH,
+        VOCABS_TABLE_PATH,
+        GROUPS_TABLE_PATH,
+        GROUPS_CONTENTS_TABLE_PATH,
+        LANGUAGES_TABLE_PATH,
+        TRAINING_SESSIONS_TABLE_PATH,
+        TRAINING_SESSIONS_INFO_TABLE_PATH,
+        STATES_TABLE_PATH,
+    ]
+]
+
+# Data manipulation queries
 create_user = f"""
     DECLARE $chat_id AS Int64;
 

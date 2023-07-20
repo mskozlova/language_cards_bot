@@ -273,3 +273,8 @@ def delete_words_from_group(pool, chat_id, language, group_id, words):
             group_id=group_id.encode(),
             words=words_list[i:i+GROUPS_UPDATE_BUCKET_SIZE]
         )
+
+
+def truncate_tables(pool):
+    for query in queries.truncate_tables_queries:
+        execute_update_query(pool, query)
