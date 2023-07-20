@@ -103,3 +103,34 @@ def format_word_for_group_action(db):
 
 def get_word_from_group_action(word):
     return word.split(" - ")[1]
+
+
+class Word:
+    def __init__(self, db_entry):
+        self.db_entry = db_entry
+    
+    
+    def get_score(self, score_type):
+        assert score_type in ("from", "to"), "score_type should be one of ('from', 'to')"
+        if self.db_entry[f"score_{score_type}"] is None:
+            return None
+        return self.db_entry[f"score_{score_type}"] / self.db_entry[f"n_trains_{score_type}"]
+    
+    
+    def get_overall_score(self):
+        score_to = self.get_score("to")
+        score_from = self.get_score("from")
+        
+        if score_to is None and score_from is None:
+            return None
+    
+        if score_to is None:
+            return score_from
+        
+        if score_from is None:
+            return score_to
+        
+        return (score_to + score_from) / 2
+    
+    def get_total_trains(self):
+        return ifnull(self.db_entry["n_trains_from"], 0) + ifnull(self.db_entry["n_trains_to"], 0)

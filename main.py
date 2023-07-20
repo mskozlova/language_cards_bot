@@ -50,6 +50,12 @@ bot.register_message_handler(handlers.process_word_translation_stop, commands=["
 bot.register_message_handler(handlers.process_word_translation,
                              state=bot_states.AddWordsState.translate, pass_bot=True)
 
+bot.register_message_handler(handlers.handle_show_words, commands=["show_words"], pass_bot=True)
+bot.register_message_handler(handlers.process_choose_word_exit, state=bot_states.ShowWordsState.show_words,
+                             commands=["exit"], pass_bot=True)
+bot.register_message_handler(handlers.process_choose_word_sort, state=bot_states.ShowWordsState.show_words, pass_bot=True)
+
+# TODO: get rid of testing commands!
 if os.getenv("IS_TESTING") is not None:
     bot.register_message_handler(test_handlers.handle_clear_db, commands=["clear_db"], pass_bot=True)
 

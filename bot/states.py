@@ -119,3 +119,8 @@ class SetLanguageState(StatesGroup):
 class AddWordsState(StatesGroup):
     add_words = State()
     translate = State()
+
+
+class ShowWordsState(StatesGroup):
+    show_words = State()
+    choose_sorting = State()
