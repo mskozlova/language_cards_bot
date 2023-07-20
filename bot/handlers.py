@@ -8,7 +8,9 @@ from database.ydb_settings import pool
 from logs import logger, logged_execution
 import user_interaction.options as options
 import user_interaction.texts as texts
+from word import Word
 
+import bot.constants as constants
 import bot.keyboards as keyboards
 import bot.states as states
 
@@ -173,69 +175,76 @@ def process_word_translation(message: Message, bot: TeleBot):
             )
 
 
-# # show words
+# show words
 
-# @logged_execution
-# def handle_show_words(message: Message, bot: TeleBot):
-#     language = db_model.get_current_language(pool, message.chat.id)
-#     if language is None:
-#         handle_language_not_set(message)
-#         return
+@logged_execution
+def handle_show_words(message: Message, bot: TeleBot):
+    language = db_model.get_current_language(pool, message.chat.id)
+    if language is None:
+        handle_language_not_set(message, bot)
+        return
 
-#     vocab = db_model.get_full_vocab(pool, message.chat.id, language)
-#     for word in vocab:
-#         word["score"] = get_overall_score(word)
-#         word["n_trains"] = get_total_trains(word)
+    vocab = db_model.get_full_vocab(pool, message.chat.id, language)
+    for entry in vocab:
+        word = Word(entry)
+        entry["score"] = word.get_overall_score()
+        entry["n_trains"] = word.get_total_trains()
     
-#     # TODO: make all keyboards one time
-#     markup = types.ReplyKeyboardMarkup(row_width=3, resize_keyboard=True, one_time_keyboard=True)
-#     markup.add(*options.show_words_sort_options, row_width=2)
-#     markup.add(telebot.types.KeyboardButton("/exit"))
+    # TODO: make all keyboards one time
+    markup = keyboards.get_reply_keyboard(options.show_words_sort_options, ["/exit"], row_width=3)
+    bot.send_message(message.chat.id, texts.choose_sorting, reply_markup=markup)
     
-#     reply_message = bot.send_message(message.chat.id, texts.choose_sorting, reply_markup=markup)
-#     bot.register_next_step_handler(
-#         reply_message, CallbackLogger(process_choose_word_sort),
-#         words=vocab, original_command="/show_words"
-#     )
+    bot.set_state(message.from_user.id, states.ShowWordsState.show_words, message.chat.id)
+    with bot.retrieve_data(message.from_user.id, message.chat.id) as data:
+        data["vocabulary"] = vocab
+        data["original_command"] = message.text
 
 
-# def process_choose_word_sort(message, words, original_command):
-#     if message.text == "/exit":
-#         bot.reply_to(message, texts.exited, reply_markup=empty_markup)
-#         return
-#     if message.text not in options.show_words_sort_options:
-#         bot.reply_to(message, texts.sorting_not_supported.format(original_command), reply_markup=empty_markup)
-#         return
+def process_choose_word_exit(message: Message, bot: TeleBot):
+    bot.delete_state(message.from_user.id, message.chat.id)
+    bot.reply_to(message, texts.exited)
+
     
-#     # TODO: get rid of string constants
-#     if message.text == "a-z":
-#         words = sorted(words, key=lambda w: w["word"])
-#     elif message.text == "z-a":
-#         words = sorted(words, key=lambda w: w["word"])[::-1]
-#     elif message.text == "n trains ⬇️":
-#         words = sorted(words, key=lambda w: w["n_trains"])[::-1]
-#     elif message.text == "n trains ⬆️":
-#         words = sorted(words, key=lambda w: w["n_trains"])
-#     elif message.text == "time added ⬇️":
-#         words = sorted(words, key=lambda w: w["added_timestamp"])[::-1]
-#     elif message.text == "time added ⬆️":
-#         words = sorted(words, key=lambda w: w["added_timestamp"])
-#     elif message.text == "score ⬇️":
-#         unknown_score = list(filter(lambda w: w["score"] is None, words))
-#         known_score = list(filter(lambda w: w["score"] is not None, words))
-#         words = sorted(known_score, key=lambda w: w["score"])[::-1]
-#         words.extend(unknown_score)
-#     elif message.text == "score ⬆️":
-#         unknown_score = list(filter(lambda w: w["score"] is None, words))
-#         known_score = list(filter(lambda w: w["score"] is not None, words))
-#         words = sorted(known_score, key=lambda w: w["score"])
-#         words.extend(unknown_score)
+def process_choose_word_sort(message: Message, bot: TeleBot):
+    # (message, words, original_command):
+
+    with bot.retrieve_data(message.from_user.id, message.chat.id) as data:
+        if message.text not in options.show_words_sort_options:
+            bot.reply_to(message, texts.sorting_not_supported.format(data["original_command"]))
+            bot.delete_state(message.from_user.id, message.chat.id)
+            return
+        
+        words = data["vocabulary"]
     
-#     CallbackLogger(process_show_words_batch)(
-#         message, words=words,
-#         batch_size=20, batch_number=0,
-#         original_command="/show_words"
-#     )
+    # TODO: get rid of string constants
+    if message.text == "a-z":
+        words = sorted(words, key=lambda w: w["word"])
+    elif message.text == "z-a":
+        words = sorted(words, key=lambda w: w["word"])[::-1]
+    elif message.text == "n trains ⬇️":
+        words = sorted(words, key=lambda w: w["n_trains"])[::-1]
+    elif message.text == "n trains ⬆️":
+        words = sorted(words, key=lambda w: w["n_trains"])
+    elif message.text == "time added ⬇️":
+        words = sorted(words, key=lambda w: w["added_timestamp"])[::-1]
+    elif message.text == "time added ⬆️":
+        words = sorted(words, key=lambda w: w["added_timestamp"])
+    elif message.text == "score ⬇️":
+        unknown_score = list(filter(lambda w: w["score"] is None, words))
+        known_score = list(filter(lambda w: w["score"] is not None, words))
+        words = sorted(known_score, key=lambda w: w["score"])[::-1]
+        words.extend(unknown_score)
+    elif message.text == "score ⬆️":
+        unknown_score = list(filter(lambda w: w["score"] is None, words))
+        known_score = list(filter(lambda w: w["score"] is not None, words))
+        words = sorted(known_score, key=lambda w: w["score"])
+        words.extend(unknown_score)
+    
+    CallbackLogger(process_show_words_batch)(
+        message, words=words,
+        batch_size=20, batch_number=0,
+        original_command="/show_words"
+    )
 
 
 # def process_show_words_batch(message, words, batch_size, batch_number, original_command):
