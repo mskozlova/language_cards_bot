@@ -6,24 +6,21 @@ from telebot.types import Message
 import database.model as db_model
 from database.ydb_settings import pool
 from logs import logger, logged_execution
-import user_interaction.options as options
-import user_interaction.texts as texts
-from word import Word
+from user_interaction import options, texts
+import word as word_utils
 
-import bot.constants as constants
-import bot.keyboards as keyboards
-import bot.states as states
+from bot import constants, keyboards, states, utils
 
 
 @logged_execution
 def handle_help(message: Message, bot: TeleBot):
-    bot.send_message(message.chat.id, texts.help_message)
+    bot.send_message(message.chat.id, texts.help_message, reply_markup=keyboards.empty)
 
 
 @logged_execution
 def handle_stop(message: Message, bot: TeleBot):
     bot.delete_state(message.from_user.id, message.chat.id)
-    bot.send_message(message.chat.id, texts.stop_message)
+    bot.send_message(message.chat.id, texts.stop_message, reply_markup=keyboards.empty)
 
 
 @logged_execution
@@ -44,9 +41,9 @@ def process_forget_me(message: Message, bot: TeleBot):
     
     if options.delete_are_you_sure[message.text]:
         db_model.delete_user(pool, message.chat.id)
-        bot.send_message(message.chat.id, texts.forget_me_final)
+        bot.send_message(message.chat.id, texts.forget_me_final, reply_markup=keyboards.empty)
     else:
-        bot.send_message(message.chat.id, texts.cancel_short)
+        bot.send_message(message.chat.id, texts.cancel_short, reply_markup=keyboards.empty)
 
 
 @logged_execution
@@ -62,12 +59,12 @@ def handle_unknown(message: Message, bot: TeleBot):
 def handle_set_language(message: Message, bot: TeleBot):
     language = db_model.get_current_language(pool, message.chat.id)
     if language is not None:
-        bot.send_message(message.chat.id, texts.current_language.format(language))
+        bot.send_message(message.chat.id, texts.current_language.format(language), reply_markup=keyboards.empty)
     
     languages = db_model.get_available_languages(pool, message.chat.id)
     
     if len(languages) == 0:
-        bot.send_message(message.chat.id, texts.no_languages_yet)
+        bot.send_message(message.chat.id, texts.no_languages_yet, reply_markup=keyboards.empty)
     else:
         markup = keyboards.get_reply_keyboard(languages, ["/cancel"])
         bot.send_message(message.chat.id, texts.set_language, reply_markup=markup)
@@ -80,7 +77,7 @@ def handle_set_language(message: Message, bot: TeleBot):
 @logged_execution
 def process_setting_language_cancel(message: Message, bot: TeleBot):
     bot.delete_state(message.from_user.id, message.chat.id)
-    bot.send_message(message.chat.id, texts.set_language_cancel)
+    bot.send_message(message.chat.id, texts.set_language_cancel, reply_markup=keyboards.empty)
 
 
 @logged_execution
@@ -89,7 +86,7 @@ def process_setting_language(message: Message, bot: TeleBot):
     user_info = db_model.get_user_info(pool, message.chat.id)
     
     if len(user_info) == 0: # new user!
-        bot.send_message(message.chat.id, texts.welcome)
+        bot.send_message(message.chat.id, texts.welcome, reply_markup=keyboards.empty)
         db_model.create_user(pool, message.chat.id)
     
     with bot.retrieve_data(message.from_user.id, message.chat.id) as data:
@@ -97,18 +94,14 @@ def process_setting_language(message: Message, bot: TeleBot):
             bot.send_message(
                 message.chat.id,
                 texts.new_language_created.format(language),
+                reply_markup=keyboards.empty
             )
             db_model.user_add_language(pool, message.chat.id, language)
 
     bot.delete_state(message.from_user.id, message.chat.id)
 
     db_model.update_current_lang(pool, message.chat.id, language)
-    bot.send_message(message.chat.id, texts.language_is_set.format(language))
-
-
-@logged_execution
-def handle_language_not_set(message, bot):
-    bot.send_message(message.chat.id, texts.no_language_is_set)
+    bot.send_message(message.chat.id, texts.language_is_set.format(language), reply_markup=keyboards.empty)
 
 
 # add words
@@ -119,7 +112,7 @@ def handle_language_not_set(message, bot):
 def handle_add_words(message: Message, bot: TeleBot):
     language = db_model.get_current_language(pool, message.chat.id)
     if language is None:
-        handle_language_not_set(message, bot)
+        utils.handle_language_not_set(message, bot)
         return
     
     bot.set_state(message.from_user.id, states.AddWordsState.add_words, message.chat.id)
@@ -143,7 +136,8 @@ def process_adding_words(message: Message, bot: TeleBot):
     bot.reply_to(message, texts.add_words_instruction_2.format(words))
     bot.send_message(
         message.chat.id,
-        texts.add_words_translate.format(words[0])
+        texts.add_words_translate.format(words[0]),
+        reply_markup=keyboards.empty
     )
     
     bot.set_state(message.from_user.id, states.AddWordsState.translate, message.chat.id)
@@ -155,7 +149,7 @@ def process_adding_words(message: Message, bot: TeleBot):
 @logged_execution
 def process_word_translation_stop(message: Message, bot: TeleBot):
     bot.delete_state(message.from_user.id, message.chat.id)
-    bot.send_message(message.chat.id, texts.add_words_cancelled)
+    bot.send_message(message.chat.id, texts.add_words_cancelled, reply_markup=keyboards.empty)
         
 
 @logged_execution
@@ -166,27 +160,40 @@ def process_word_translation(message: Message, bot: TeleBot):
         if len(data["translations"]) == len(data["words"]): # translation is over
             db_model.update_vocab(pool, message.chat.id, data["language"], data["words"], data["translations"])
             bot.send_message(
-                message.chat.id, texts.add_words_finished.format(len(data["words"]))
+                message.chat.id, texts.add_words_finished.format(len(data["words"])),
+                reply_markup=keyboards.empty
             )
             bot.delete_state(message.from_user.id, message.chat.id)
         else:
             bot.send_message(
-                message.chat.id, data["words"][len(data["translations"])]
+                message.chat.id, data["words"][len(data["translations"])],
+                reply_markup=keyboards.empty
             )
 
 
 # show words
 
+# TODO: delete all unnecessary messages
 @logged_execution
 def handle_show_words(message: Message, bot: TeleBot):
     language = db_model.get_current_language(pool, message.chat.id)
     if language is None:
-        handle_language_not_set(message, bot)
+        utils.handle_language_not_set(message, bot)
         return
 
     vocab = db_model.get_full_vocab(pool, message.chat.id, language)
+    if len(vocab) == 0:
+        bot.send_message(message.chat.id, texts.no_words_yet, reply_markup=keyboards.empty)
+        return
+    
+    bot.send_message(
+        message.chat.id,
+        texts.words_count.format(len(vocab), language),
+        reply_markup=keyboards.empty
+    )
+
     for entry in vocab:
-        word = Word(entry)
+        word = word_utils.Word(entry)
         entry["score"] = word.get_overall_score()
         entry["n_trains"] = word.get_total_trains()
     
@@ -194,20 +201,20 @@ def handle_show_words(message: Message, bot: TeleBot):
     markup = keyboards.get_reply_keyboard(options.show_words_sort_options, ["/exit"], row_width=3)
     bot.send_message(message.chat.id, texts.choose_sorting, reply_markup=markup)
     
-    bot.set_state(message.from_user.id, states.ShowWordsState.show_words, message.chat.id)
+    bot.set_state(message.from_user.id, states.ShowWordsState.choose_sort, message.chat.id)
     with bot.retrieve_data(message.from_user.id, message.chat.id) as data:
         data["vocabulary"] = vocab
         data["original_command"] = message.text
 
 
+@logged_execution
 def process_choose_word_exit(message: Message, bot: TeleBot):
     bot.delete_state(message.from_user.id, message.chat.id)
     bot.reply_to(message, texts.exited)
 
-    
+  
+@logged_execution  
 def process_choose_word_sort(message: Message, bot: TeleBot):
-    # (message, words, original_command):
-
     with bot.retrieve_data(message.from_user.id, message.chat.id) as data:
         if message.text not in options.show_words_sort_options:
             bot.reply_to(message, texts.sorting_not_supported.format(data["original_command"]))
@@ -239,45 +246,58 @@ def process_choose_word_sort(message: Message, bot: TeleBot):
         known_score = list(filter(lambda w: w["score"] is not None, words))
         words = sorted(known_score, key=lambda w: w["score"])
         words.extend(unknown_score)
-    
-    CallbackLogger(process_show_words_batch)(
-        message, words=words,
-        batch_size=20, batch_number=0,
-        original_command="/show_words"
-    )
-
-
-# def process_show_words_batch(message, words, batch_size, batch_number, original_command):
-#     if batch_number != 0:
-#         if message.text == "/exit":
-#             bot.send_message(message.chat.id, texts.exited, reply_markup=empty_markup)
-#             return
-#         if message.text != "/next":
-#             bot.send_message(message.chat.id, texts.unknown_command.format(original_command),
-#                             reply_markup=empty_markup)
-#             return
-    
-#     words_batch = words[batch_number * batch_size:(batch_number + 1) * batch_size]
-#     words_formatted = [format_word_for_listing(word) for word in words_batch]
-    
-#     if len(words_batch) == 0:
-#         bot.send_message(message.chat.id, texts.no_more_words, reply_markup=empty_markup)
-#         return
-    
-#     n_pages = len(words) // batch_size
-#     if len(words) % batch_size > 0:
-#         n_pages += 1
         
-#     markup = types.ReplyKeyboardMarkup(row_width=2, resize_keyboard=True, one_time_keyboard=True)
-#     markup.add(*["/exit", "/next"], row_width=2)
+    with bot.retrieve_data(message.from_user.id, message.chat.id) as data:
+        data["vocabulary"] = words
+        data["batch_number"] = 0
+    bot.set_state(message.from_user.id, states.ShowWordsState.show_words, message.chat.id)
+    process_show_words_batch_next(message, bot)
+
+
+@logged_execution  
+def process_show_words_batch_exit(message: Message, bot: TeleBot):
+    bot.send_message(message.chat.id, texts.exited, reply_markup=keyboards.empty)
+    bot.delete_state(message.from_user.id, message.chat.id)
+
+
+@logged_execution  
+def process_show_words_batch_unknown(message: Message, bot: TeleBot):
+    with bot.retrieve_data(message.from_user.id, message.chat.id) as data:
+        bot.send_message(
+            message.chat.id,
+            texts.unknown_command.format(data["original_command"]),
+            reply_markup=keyboards.empty
+        )
+    bot.delete_state(message.from_user.id, message.chat.id)
+
+
+@logged_execution  
+def process_show_words_batch_next(message: Message, bot: TeleBot):
+    with bot.retrieve_data(message.from_user.id, message.chat.id) as data:
+        batch_number = data["batch_number"]
+        words = data["vocabulary"]
+
+    words_batch = words[
+        batch_number * constants.SHOW_WORDS_BATCH_SIZE:
+        (batch_number + 1) * constants.SHOW_WORDS_BATCH_SIZE
+    ]
+    words_formatted = [word_utils.format_word_for_listing(word) for word in words_batch]
     
-#     bot.send_message(
-#         message.chat.id,
-#         texts.word_formatted.format(batch_number + 1, n_pages, "\n".join(words_formatted)),
-#         reply_markup=markup, parse_mode="MarkdownV2"
-#     )
+    n_pages = len(words) // constants.SHOW_WORDS_BATCH_SIZE
+    if len(words) % constants.SHOW_WORDS_BATCH_SIZE > 0:
+        n_pages += 1
     
-#     bot.register_next_step_handler(
-#         message, CallbackLogger(process_show_words_batch),
-#         words=words, batch_size=batch_size, batch_number=batch_number+1, original_command=original_command
-#     )
+    if len(words_batch) < constants.SHOW_WORDS_BATCH_SIZE:
+        # we've run out of words 
+        markup = keyboards.empty
+        bot.delete_state(message.from_user.id, message.chat.id)
+    else:    
+        markup = keyboards.get_reply_keyboard(["/exit", "/next"])
+        with bot.retrieve_data(message.from_user.id, message.chat.id) as data:
+            data["batch_number"] += 1
+
+    bot.send_message(
+        message.chat.id,
+        texts.word_formatted.format(batch_number + 1, n_pages, "\n".join(words_formatted)),
+        reply_markup=markup, parse_mode="MarkdownV2"
+    )

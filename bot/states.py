@@ -122,5 +122,5 @@ class AddWordsState(StatesGroup):
 
 
 class ShowWordsState(StatesGroup):
+    choose_sort = State()
     show_words = State()
-    choose_sorting = State()
