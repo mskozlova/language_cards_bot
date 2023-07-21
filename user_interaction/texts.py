@@ -121,7 +121,9 @@ unknown_message = "I don't know what to do :("
 stop_message = "Ok, stopped!"
 
 # show words
-no_more_words = "This is all the words we have!"
+words_count = "You have {} words for language '{}'."
+
+no_words_yet = "You don't have any words yet, try /add_words!"
 
 word_formatted = "Page {} of {}:\n\n🤍`    %    #  word`\n{}"
 

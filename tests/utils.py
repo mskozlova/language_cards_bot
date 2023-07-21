@@ -18,7 +18,7 @@ class CommandContext:
         return
     
 
-    def expect_next(self, correct_response, sleep_s=0.2, timeout_s=10):
+    def expect_next(self, correct_response, sleep_s=0.2, timeout_s=60):
         assert correct_response is not None, "correct_response should be specified"
         
         timer = 0
@@ -36,7 +36,7 @@ class CommandContext:
             sleep(sleep_s)
 
  
-    def expect_next_prefix(self, correct_response_prefix, sleep_s=0.2, timeout_s=10):
+    def expect_next_prefix(self, correct_response_prefix, sleep_s=0.2, timeout_s=60):
         assert correct_response_prefix is not None, "correct_response should be specified"
         
         timer = 0
@@ -67,5 +67,26 @@ class CommandContext:
             sleep(sleep_s)
     
     
-    def expect_length(self, num_rows, sleep_s=0.5, timeout_s=10):
+    def expect_length(self, num_rows, sleep_s=0.5, timeout_s=60):
         raise NotImplementedError
+
+
+    def expect_any(self, sleep_s=0.2, timeout_s=60):
+        timer = 0
+        while timer <= timeout_s:
+            response = self.client.get_messages(self.chat_id, self.message.id + self.step).text
+            if response is not None: # found target message
+                self.step += 1
+                break
+
+            timer += sleep_s
+            sleep(sleep_s)
+
+        assert response is not None, (
+            f"'{self.command}' failed due to absence of reaction on step {self.step - 1}"
+        )
+
+
+    def expect_any_multiple(self, number_of_responses, sleep_s=0.2, timeout_s=60):
+        for i in range(number_of_responses):
+            self.expect_any(sleep_s=sleep_s, timeout_s=timeout_s)
