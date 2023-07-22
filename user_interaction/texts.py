@@ -45,9 +45,12 @@ delete_language_final = (
 )
 
 # /delete_words
-delete_words_start = "Write words to delete. Each word on new line."
+delete_words_start = (
+    "Write words to delete. Each word on a new line.\n\n"
+    "Use /cancel to exit the process."
+)
 
-deleted_words_list = "Deleted {} words:\n{}{}"
+deleted_words_list = "Deleted {} word(s):\n{}{}"
 
 deleted_words_unknown = "\n\nOther words are unknown."
 
@@ -126,7 +129,7 @@ unknown_message = "I don't know what to do :("
 stop_message = "Ok, stopped!"
 
 # show words
-words_count = "You have {} words for language '{}'."
+words_count = "You have {} word(s) for language '{}'."
 
 no_words_yet = "You don't have any words yet, try /add_words!"
 

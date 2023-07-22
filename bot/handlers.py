@@ -371,3 +371,44 @@ def process_delete_language(message: Message, bot: TeleBot):
         )
     else:
         bot.send_message(message.chat.id, texts.cancel_short, reply_markup=keyboards.empty)
+
+
+# TODO: delete words from groups too
+# @bot.message_handler(commands=["delete_words"])
+@logged_execution
+def handle_delete_words(message: Message, bot: TeleBot):
+    language = db_model.get_current_language(pool, message.chat.id)
+    if language is None:
+        utils.handle_language_not_set(message, bot)
+        return
+
+    bot.send_message(message.chat.id, texts.delete_words_start)
+    bot.set_state(message.from_user.id, states.DeleteWords.init, message.chat.id)
+    with bot.retrieve_data(message.from_user.id, message.chat.id) as data:
+        data["language"] = language
+
+
+@logged_execution
+def process_deleting_words_cancel(message: Message, bot: TeleBot):
+    bot.delete_state(message.from_user.id, message.chat.id)
+    bot.send_message(message.chat.id, texts.cancel_short, reply_markup=keyboards.empty)
+
+
+@logged_execution
+def process_deleting_words(message: Message, bot: TeleBot):
+    with bot.retrieve_data(message.from_user.id, message.chat.id) as data:
+        language = data["language"]
+    bot.delete_state(message.from_user.id, message.chat.id)
+    
+    words = message.text.split("\n")
+    existing_words = db_model.get_words_from_vocab(pool, message.chat.id, language, words)
+    db_model.delete_words_from_vocab(pool, message.chat.id, language, words)
+    
+    bot.send_message(
+        message.chat.id,
+        texts.deleted_words_list.format(
+            len(existing_words),
+            "\n".join([entry["word"] for entry in existing_words]),
+            "" if len(existing_words) == len(words) else texts.deleted_words_unknown
+        )
+    )
