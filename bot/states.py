@@ -124,3 +124,7 @@ class AddWordsState(StatesGroup):
 class ShowWordsState(StatesGroup):
     choose_sort = State()
     show_words = State()
+
+
+class DeleteLanguage(StatesGroup):
+    init = State()

@@ -134,7 +134,13 @@ def get_current_language(pool, chat_id):
         pool, queries.get_current_language,
         chat_id=chat_id
     )
-    return result[0]["current_lang"].decode() if len(result) == 1 else None
+    if len(result) != 1:
+        return None
+    
+    if result[0]["current_lang"] is None:
+        return None
+    
+    return result[0]["current_lang"].decode()
 
 
 def init_training_session(pool, chat_id, session_info):

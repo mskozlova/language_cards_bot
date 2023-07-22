@@ -22,3 +22,8 @@ delete_are_you_sure = {
     "Yes!": True,
     "No..": False,
 }
+
+show_languages_mark_current = {
+    True: "💚 {}",
+    False: "🖤 {}",
+}

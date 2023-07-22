@@ -65,51 +65,19 @@ bot.register_message_handler(handlers.process_show_words_batch_unknown,
                              state=bot_states.ShowWordsState.show_words,
                              pass_bot=True)
 
+bot.register_message_handler(handlers.handle_show_current_language, commands=["show_current_language"], pass_bot=True)
+bot.register_message_handler(handlers.handle_show_languages, commands=["show_languages"], pass_bot=True)
+
+bot.register_message_handler(handlers.handle_delete_language, commands=["delete_language"], pass_bot=True)
+bot.register_message_handler(handlers.process_delete_language,
+                             state=bot_states.DeleteLanguage.init, pass_bot=True)
+
 # TODO: get rid of testing commands!
 if os.getenv("IS_TESTING") is not None:
     bot.register_message_handler(test_handlers.handle_clear_db, commands=["clear_db"], pass_bot=True)
 
 def handle_language_not_set(message, bot):
     bot.send_message(message.chat.id, texts.no_language_is_set)
-
-
-@bot.message_handler(commands=["show_current_language"])
-@logged_execution
-def handle_show_current_languages(message):
-    current_language = db_model.get_current_language(pool, message.chat.id)
-    if current_language is not None:
-        bot.reply_to(
-            message,
-            texts.current_language.format(current_language)
-        )
-    else:
-        handle_language_not_set(message)
-
-
-@bot.message_handler(commands=["delete_language"])
-@logged_execution
-def handle_delete_language(message):
-    language = db_model.get_current_language(pool, message.chat.id)
-    if language is None:
-        handle_language_not_set(message)
-        return
-    
-    markup = types.ReplyKeyboardMarkup(
-        row_width=len(options.delete_are_you_sure),
-        resize_keyboard=True, one_time_keyboard=True
-    )
-    markup.add(*options.delete_are_you_sure.keys(), row_width=len(options.delete_are_you_sure))
-    bot.send_message(
-        message.chat.id,
-        texts.delete_language_warning.format(language),
-        reply_markup=markup
-    )
-    bot.register_next_step_handler(message, CallbackLogger(process_delete_language), language=language)
-
-
-def process_delete_language(message, language):
-    db_model.delete_language(pool, message.chat.id, language)
-    bot.send_message(message.chat.id, texts.delete_language_final.format(language))
 
 
 # TODO: delete words from groups too
