@@ -12,6 +12,7 @@ import word as word_utils
 from bot import constants, keyboards, states, utils
 
 
+# TODO: add user to db after hitting /help or /start
 @logged_execution
 def handle_help(message: Message, bot: TeleBot):
     bot.send_message(message.chat.id, texts.help_message, reply_markup=keyboards.empty)
@@ -301,3 +302,72 @@ def process_show_words_batch_next(message: Message, bot: TeleBot):
         texts.word_formatted.format(batch_number + 1, n_pages, "\n".join(words_formatted)),
         reply_markup=markup, parse_mode="MarkdownV2"
     )
+
+
+@logged_execution
+def handle_show_current_language(message: Message, bot: TeleBot):
+    current_language = db_model.get_current_language(pool, message.chat.id)
+    if current_language is not None:
+        bot.send_message(message.chat.id, texts.current_language.format(current_language))
+    else:
+        utils.handle_language_not_set(message, bot)
+
+
+@logged_execution
+def handle_show_languages(message: Message, bot: TeleBot):
+    languages = sorted(db_model.get_available_languages(pool, message.chat.id))
+    current_language = db_model.get_current_language(pool, message.chat.id)
+    
+    if len(languages) == 0:
+        bot.send_message(
+            message.chat.id,
+            texts.show_languages_none,
+            reply_markup=keyboards.empty
+        )
+    else:
+        languages = [
+            options.show_languages_mark_current[l == current_language].format(l)
+            for l in languages
+        ]
+        bot.send_message(
+            message.chat.id,
+            texts.available_languages.format(len(languages), "\n".join(languages)),
+            reply_markup=keyboards.empty
+        )
+
+
+@logged_execution
+def handle_delete_language(message: Message, bot: TeleBot):
+    language = db_model.get_current_language(pool, message.chat.id)
+    if language is None:
+        utils.handle_language_not_set(message, bot)
+        return
+    
+    markup = keyboards.get_reply_keyboard(options.delete_are_you_sure)
+    bot.send_message(
+        message.chat.id,
+        texts.delete_language_warning.format(language),
+        reply_markup=markup
+    )
+    bot.set_state(message.from_user.id, states.DeleteLanguage.init, message.chat.id)
+    with bot.retrieve_data(message.from_user.id, message.chat.id) as data:
+        data["language"] = language
+
+
+@logged_execution
+def process_delete_language(message: Message, bot: TeleBot):
+    with bot.retrieve_data(message.from_user.id, message.chat.id) as data:
+        language = data["language"]
+    bot.delete_state(message.from_user.id, message.chat.id)
+
+    if message.text not in options.delete_are_you_sure:
+        bot.reply_to(message, texts.unknown_command_short)
+    elif options.delete_are_you_sure[message.text]:
+        db_model.delete_language(pool, message.chat.id, language)
+        bot.send_message(
+            message.chat.id,
+            texts.delete_language_final.format(language),
+            reply_markup=keyboards.empty
+        )
+    else:
+        bot.send_message(message.chat.id, texts.cancel_short, reply_markup=keyboards.empty)

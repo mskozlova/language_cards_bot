@@ -66,6 +66,11 @@ language_is_set = "Language set: {}.\nYou can /add_words to it or /train"
 
 no_language_is_set = "Language not set. Set in with command /set_language."
 
+# show languages
+show_languages_none = "You don't have any languages yet. Try /set_language to add one."
+
+available_languages = "You have {} language(s):\n{}"
+
 # /add_words
 add_words_instruction_1 = (
     "First, write new words you want to learn, each on new row.\n"
