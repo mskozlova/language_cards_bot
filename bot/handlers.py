@@ -1,3 +1,4 @@
+from hashlib import blake2b
 import json
 
 from telebot import TeleBot
@@ -304,6 +305,8 @@ def process_show_words_batch_next(message: Message, bot: TeleBot):
     )
 
 
+# show language info
+
 @logged_execution
 def handle_show_current_language(message: Message, bot: TeleBot):
     current_language = db_model.get_current_language(pool, message.chat.id)
@@ -335,6 +338,8 @@ def handle_show_languages(message: Message, bot: TeleBot):
             reply_markup=keyboards.empty
         )
 
+
+# delete language
 
 @logged_execution
 def handle_delete_language(message: Message, bot: TeleBot):
@@ -372,6 +377,8 @@ def process_delete_language(message: Message, bot: TeleBot):
     else:
         bot.send_message(message.chat.id, texts.cancel_short, reply_markup=keyboards.empty)
 
+
+# delete words
 
 # TODO: delete words from groups too
 # @bot.message_handler(commands=["delete_words"])
@@ -412,3 +419,47 @@ def process_deleting_words(message: Message, bot: TeleBot):
             "" if len(existing_words) == len(words) else texts.deleted_words_unknown
         )
     )
+
+
+# create group
+
+# @bot.message_handler(commands=["create_group"])
+@logged_execution
+def handle_create_group(message: Message, bot: TeleBot):
+    language = db_model.get_current_language(pool, message.chat.id)
+    if language is None:
+        utils.handle_language_not_set(message, bot)
+        return
+
+    bot.send_message(message.chat.id, texts.create_group_name)
+    bot.set_state(message.from_user.id, states.CreateGroupState.init, message.chat.id)
+    with bot.retrieve_data(message.from_user.id, message.chat.id) as data:
+        data["language"] = language
+    
+
+@logged_execution
+def process_group_creation_cancel(message: Message, bot: TeleBot):
+    bot.delete_state(message.from_user.id, message.chat.id)
+    bot.send_message(message.chat.id, texts.cancel_short, reply_markup=keyboards.empty)
+
+
+@logged_execution
+def process_group_creation(message: Message, bot: TeleBot):
+    with bot.retrieve_data(message.from_user.id, message.chat.id) as data:
+        language = data["language"]
+    bot.delete_state(message.from_user.id, message.chat.id)
+
+    # TODO: check latin letters and underscores
+    # TODO: check name collisions with shared groups
+    group_name = message.text.strip()
+    if len(db_model.get_group_by_name(pool, message.chat.id, language, group_name)) > 0:
+        bot.reply_to(message, texts.group_already_exists)
+        return
+    
+    group_id = blake2b(digest_size=10)
+    group_key = "{}-{}-{}".format(message.chat.id, language, group_name)
+    group_id.update(group_key.encode())
+    
+    db_model.add_group(pool, message.chat.id, language=language,
+                       group_name=group_name, group_id=group_id.hexdigest(), is_creator=True)
+    bot.send_message(message.chat.id, texts.group_created)

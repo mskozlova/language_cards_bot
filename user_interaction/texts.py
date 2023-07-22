@@ -104,6 +104,8 @@ add_words_translate = "Translate {}"
 create_group_name = (
     "Write new group name. It should consist only of latin letters, digits and underscores.\n"
     "For example, 'nouns_type_3'"
+    ""
+    "Use /cancel to exit the process."
 )
 
 group_already_exists = "You already have a group with that name, please try another: /create_group"

@@ -132,3 +132,7 @@ class DeleteLanguage(StatesGroup):
 
 class DeleteWords(StatesGroup):
     init = State()
+
+
+class CreateGroupState(StatesGroup):
+    init = State()

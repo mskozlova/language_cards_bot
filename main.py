@@ -1,4 +1,3 @@
-from hashlib import blake2b
 import json
 import os
 import random
@@ -80,41 +79,21 @@ bot.register_message_handler(handlers.process_deleting_words,
                              state=bot_states.DeleteWords.init,
                              pass_bot=True)
 
+bot.register_message_handler(handlers.handle_create_group, commands=["create_group"], pass_bot=True)
+bot.register_message_handler(handlers.process_group_creation_cancel,
+                             commands=["cancel"],
+                             state=bot_states.CreateGroupState.init,
+                             pass_bot=True)
+bot.register_message_handler(handlers.process_group_creation,
+                             state=bot_states.CreateGroupState.init,
+                             pass_bot=True)
+
 # TODO: get rid of testing commands!
 if os.getenv("IS_TESTING") is not None:
     bot.register_message_handler(test_handlers.handle_clear_db, commands=["clear_db"], pass_bot=True)
 
 def handle_language_not_set(message, bot):
     bot.send_message(message.chat.id, texts.no_language_is_set)
-
-
-@bot.message_handler(commands=["create_group"])
-@logged_execution
-def handle_create_group(message):
-    current_language = db_model.get_current_language(pool, message.chat.id)
-    if current_language is None:
-        handle_language_not_set(message)
-        return
-
-    reply_message = bot.reply_to(message, texts.create_group_name)
-    bot.register_next_step_handler(reply_message, CallbackLogger(process_group_creation), language=current_language)
-        
-
-def process_group_creation(message, language):
-    # TODO: check latin letters and underscores
-    # TODO: check name collisions with shared groups
-    group_name = message.text.strip()
-    if len(db_model.get_group_by_name(pool, message.chat.id, language, group_name)) > 0:
-        bot.reply_to(message, texts.group_already_exists)
-        return
-    
-    group_id = blake2b(digest_size=10)
-    group_key = "{}-{}-{}".format(message.chat.id, language, group_name)
-    group_id.update(group_key.encode())
-    
-    db_model.add_group(pool, message.chat.id, language=language,
-                       group_name=group_name, group_id=group_id.hexdigest(), is_creator=True)
-    bot.reply_to(message, texts.group_created)
 
 
 def process_show_groups(message, language):
