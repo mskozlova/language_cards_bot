@@ -128,3 +128,7 @@ class ShowWordsState(StatesGroup):
 
 class DeleteLanguage(StatesGroup):
     init = State()
+
+
+class DeleteWords(StatesGroup):
+    init = State()

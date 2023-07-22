@@ -72,39 +72,20 @@ bot.register_message_handler(handlers.handle_delete_language, commands=["delete_
 bot.register_message_handler(handlers.process_delete_language,
                              state=bot_states.DeleteLanguage.init, pass_bot=True)
 
+bot.register_message_handler(handlers.handle_delete_words, commands=["delete_words"], pass_bot=True)
+bot.register_message_handler(handlers.process_deleting_words_cancel,
+                             state=bot_states.DeleteWords.init,
+                             commands=["cancel"], pass_bot=True)
+bot.register_message_handler(handlers.process_deleting_words,
+                             state=bot_states.DeleteWords.init,
+                             pass_bot=True)
+
 # TODO: get rid of testing commands!
 if os.getenv("IS_TESTING") is not None:
     bot.register_message_handler(test_handlers.handle_clear_db, commands=["clear_db"], pass_bot=True)
 
 def handle_language_not_set(message, bot):
     bot.send_message(message.chat.id, texts.no_language_is_set)
-
-
-# TODO: delete words from groups too
-@bot.message_handler(commands=["delete_words"])
-@logged_execution
-def handle_delete_words(message):
-    language = db_model.get_current_language(pool, message.chat.id)
-    if language is None:
-        handle_language_not_set(message)
-        return
-
-    reply_message = bot.reply_to(message, texts.delete_words_start)
-    bot.register_next_step_handler(reply_message, CallbackLogger(process_deleting_words), language=language)
-
-
-def process_deleting_words(message, language):
-    words = message.text.split("\n")
-    existing_words = db_model.get_words_from_vocab(pool, message.chat.id, language, words)
-    db_model.delete_words_from_vocab(pool, message.chat.id, language, words)
-    bot.reply_to(
-        message,
-        texts.deleted_words_list.format(
-            len(existing_words),
-            "\n".join([entry["word"] for entry in existing_words]),
-            "" if len(existing_words) == len(words) else texts.deleted_words_unknown
-        )
-    )
 
 
 @bot.message_handler(commands=["create_group"])

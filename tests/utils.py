@@ -90,3 +90,19 @@ class CommandContext:
     def expect_any_multiple(self, number_of_responses, sleep_s=0.2, timeout_s=60):
         for i in range(number_of_responses):
             self.expect_any(sleep_s=sleep_s, timeout_s=timeout_s)
+
+
+    def expect_next_number_of_rows(self, n_rows, sleep_s=0.2, timeout_s=60):
+        timer = 0
+        while timer <= timeout_s:
+            response = self.client.get_messages(self.chat_id, self.message.id + self.step).text
+            if response is not None: # found target message
+                self.step += 1
+                assert len(response.split("\n")) == n_rows, (
+                    f"'{self.command}' failed due to wrong number of rows on step {self.step - 1}"
+                    f"\nreaction: {response}\nexpected number of rows: {n_rows}"
+                )
+                return
+
+            timer += sleep_s
+            sleep(sleep_s)
