@@ -450,7 +450,7 @@ add_group = f"""
 """
 
 delete_group = f"""
-    DECLARE $group_name AS String;
+    DECLARE $group_id AS String;
     
     DELETE FROM `{GROUPS_CONTENTS_TABLE_PATH}`
     WHERE group_id == $group_id;

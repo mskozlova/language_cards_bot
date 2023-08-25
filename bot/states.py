@@ -138,6 +138,11 @@ class CreateGroupState(StatesGroup):
     init = State()
 
 
+class DeleteGroupState(StatesGroup):
+    select_group = State()
+    are_you_sure = State()
+
+
 class AddGroupWordsState(StatesGroup):
     choose_group = State()
     choose_sorting = State()
