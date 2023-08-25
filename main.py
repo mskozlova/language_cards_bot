@@ -37,7 +37,7 @@ bot.register_message_handler(handlers.handle_forget_me, commands=["forget_me"], 
 bot.register_message_handler(handlers.process_forget_me, state=bot_states.ForgetMeState.init, pass_bot=True)
 
 bot.register_message_handler(handlers.handle_set_language, commands=["set_language"], pass_bot=True)
-bot.register_message_handler(handlers.process_setting_language_cancel, commands=["cancel"],
+bot.register_message_handler(handlers.process_cancel, commands=["cancel"],
                              state=bot_states.SetLanguageState.init, pass_bot=True)
 bot.register_message_handler(handlers.process_setting_language,
                              state=bot_states.SetLanguageState.init, pass_bot=True)
@@ -50,11 +50,11 @@ bot.register_message_handler(handlers.process_word_translation,
                              state=bot_states.AddWordsState.translate, pass_bot=True)
 
 bot.register_message_handler(handlers.handle_show_words, commands=["show_words"], pass_bot=True)
-bot.register_message_handler(handlers.process_choose_word_exit,
+bot.register_message_handler(handlers.process_exit,
                              state=bot_states.ShowWordsState.choose_sort,
                              commands=["exit"], pass_bot=True)
 bot.register_message_handler(handlers.process_choose_word_sort, state=bot_states.ShowWordsState.choose_sort, pass_bot=True)
-bot.register_message_handler(handlers.process_show_words_batch_exit,
+bot.register_message_handler(handlers.process_exit,
                              state=bot_states.ShowWordsState.show_words,
                              commands=["exit"], pass_bot=True)
 bot.register_message_handler(handlers.process_show_words_batch_next,
@@ -69,18 +69,18 @@ bot.register_message_handler(handlers.handle_show_languages, commands=["show_lan
 
 bot.register_message_handler(handlers.handle_delete_language, commands=["delete_language"], pass_bot=True)
 bot.register_message_handler(handlers.process_delete_language,
-                             state=bot_states.DeleteLanguage.init, pass_bot=True)
+                             state=bot_states.DeleteLanguageState.init, pass_bot=True)
 
 bot.register_message_handler(handlers.handle_delete_words, commands=["delete_words"], pass_bot=True)
-bot.register_message_handler(handlers.process_deleting_words_cancel,
-                             state=bot_states.DeleteWords.init,
+bot.register_message_handler(handlers.process_cancel,
+                             state=bot_states.DeleteWordsState.init,
                              commands=["cancel"], pass_bot=True)
 bot.register_message_handler(handlers.process_deleting_words,
-                             state=bot_states.DeleteWords.init,
+                             state=bot_states.DeleteWordsState.init,
                              pass_bot=True)
 
 bot.register_message_handler(handlers.handle_create_group, commands=["create_group"], pass_bot=True)
-bot.register_message_handler(handlers.process_group_creation_cancel,
+bot.register_message_handler(handlers.process_cancel,
                              commands=["cancel"],
                              state=bot_states.CreateGroupState.init,
                              pass_bot=True)
@@ -88,32 +88,26 @@ bot.register_message_handler(handlers.process_group_creation,
                              state=bot_states.CreateGroupState.init,
                              pass_bot=True)
 
+bot.register_message_handler(handlers.handle_show_groups, commands=["show_groups"], pass_bot=True)
+bot.register_message_handler(handlers.process_exit, commands=["exit"], state=bot_states.ShowGroupsState.init, pass_bot=True)
+bot.register_message_handler(handlers.process_show_group_contents, state=bot_states.ShowGroupsState.init, pass_bot=True)
+
+bot.register_message_handler(handlers.handle_group_add_words, commands=["group_add_words"], pass_bot=True)
+bot.register_message_handler(handlers.handle_choose_group_to_add_words, state=bot_states.AddGroupWordsState.choose_group, pass_bot=True)
+bot.register_message_handler(handlers.process_exit, commands=["exit"], state=bot_states.AddGroupWordsState.choose_group, pass_bot=True)
+bot.register_message_handler(handlers.process_choose_sorting_to_add_words, state=bot_states.AddGroupWordsState.choose_sorting, pass_bot=True)
+bot.register_message_handler(handlers.process_exit, commands=["exit"], state=bot_states.AddGroupWordsState.choose_sorting, pass_bot=True)
+bot.register_message_handler(handlers.process_cancel, commands=["cancel"], state=bot_states.AddGroupWordsState.choose_words, pass_bot=True)
+bot.register_message_handler(handlers.process_save_group_edit, commands=["exit"], state=bot_states.AddGroupWordsState.choose_words, pass_bot=True)
+bot.register_message_handler(handlers.process_choose_words_batch_for_group_next, commands=["next"], state=bot_states.AddGroupWordsState.choose_words, pass_bot=True)
+bot.register_message_handler(handlers.process_choose_words_batch_for_group, state=bot_states.AddGroupWordsState.choose_words, pass_bot=True)
+
 # TODO: get rid of testing commands!
 if os.getenv("IS_TESTING") is not None:
     bot.register_message_handler(test_handlers.handle_clear_db, commands=["clear_db"], pass_bot=True)
 
 def handle_language_not_set(message, bot):
     bot.send_message(message.chat.id, texts.no_language_is_set)
-
-
-def process_show_groups(message, language):
-    # TODO: handle large number of groups
-    groups = db_model.get_all_groups(pool, message.chat.id, language)
-    
-    if len(groups) == 0:
-        bot.reply_to(message, texts.no_groups_yet)
-        return
-    
-    markup = types.ReplyKeyboardMarkup(row_width=3, resize_keyboard=True)
-    markup.add(*sorted([group["group_name"].decode() for group in groups]), row_width=3)
-    markup.add(telebot.types.KeyboardButton("/exit"))
-    
-    reply_message = bot.send_message(
-        message.chat.id,
-        texts.group_choose,
-        reply_markup=markup
-    )
-    return reply_message
 
 
 @bot.message_handler(commands=["delete_group"])
@@ -186,259 +180,6 @@ def process_group_deletion(message, language, group_id, group_name, is_creator):
     
     db_model.delete_group(pool, group_id)
     bot.send_message(message.chat.id, texts.delete_group_success.format(group_name))
-
-
-@bot.message_handler(commands=["show_groups"])
-@logged_execution
-def handle_show_groups(message):
-    current_language = db_model.get_current_language(pool, message.chat.id)
-    reply_message = CallbackLogger(process_show_groups)(message, current_language)
-    bot.register_next_step_handler(reply_message, CallbackLogger(process_show_group), language=current_language)
-    
-
-def process_show_group(message, language):
-    if message.text == "/exit":
-        bot.reply_to(message, texts.show_group_done, reply_markup=empty_markup)
-        return
-    
-    groups = db_model.get_group_by_name(pool, message.chat.id, language, message.text)
-    
-    if len(groups) == 0:
-        bot.reply_to(message, texts.no_such_group.format("/show_groups"),
-                        reply_markup=empty_markup)
-        return
-    
-    group_id = groups[0]["group_id"].decode("utf-8")
-    group_contents = sorted(db_model.get_group_contents(pool, group_id), key=lambda w: w["word"])
-    for word in group_contents:
-        word["score"] = get_overall_score(word)
-        word["n_trains"] = get_total_trains(word)
-    
-    if len(group_contents) == 0:
-        bot.reply_to(message, texts.show_group_empty, reply_markup=empty_markup)
-        return
-    
-    CallbackLogger(process_show_words_batch)(
-        message, group_contents,
-        batch_size=20, batch_number=0,
-        original_command="/show_groups"
-    )
-    
-
-@bot.message_handler(commands=["group_add_words"])
-@logged_execution
-def handle_group_add_words(message):
-    current_language = db_model.get_current_language(pool, message.chat.id)
-    reply_message = CallbackLogger(process_show_groups)(message, current_language)
-    bot.register_next_step_handler(
-        reply_message,
-        CallbackLogger(process_choose_group_to_add_words),
-        language=current_language
-    )
-
-
-def get_keyboard_markup(choices, mask, additional_commands=[], row_width=2):
-    markup = types.ReplyKeyboardMarkup(row_width=row_width, resize_keyboard=True)
-        
-    formatted_choices = [
-        "{}{}".format(
-            options.group_add_words_prefixes[mask],
-            format_word_for_group_action(entry),
-        ) for entry, mask in zip(choices, mask)
-    ]
-    if len(formatted_choices) % row_width != 0:
-        formatted_choices.extend([""] * (row_width - len(formatted_choices) % row_width)) 
-    
-    markup.add(*formatted_choices, row_width=row_width)
-    markup.add(*additional_commands, row_width=len(additional_commands))
-    return markup
-
-
-def save_words_edit_to_group(chat_id, language, group_id, words, action):
-    if len(words) > 0:
-        if action == "add":
-            db_model.add_words_to_group(pool, chat_id, language, group_id, words)
-        elif action == "delete":
-            db_model.delete_words_from_group(pool, chat_id, language, group_id, words)
-
-    return len(words)
-
-
-def process_words_batch(message, language, group_id, group_name, all_words, current_words,
-                        batch_num, batch_size, ok_message=None, chosen_words=set(), is_start=False, action="add"):
-    n_batches = len(all_words) // batch_size
-    if len(all_words) % batch_size > 0:
-        n_batches += 1
-    
-    if ok_message is not None:
-        bot.delete_message(ok_message.chat.id, ok_message.id)
-    
-    batch = all_words[batch_num * batch_size:(batch_num + 1) * batch_size]
-    
-    if is_start: # new page 
-        current_words = {
-            entry["word"]: 0 if action == "add" else 1 for entry in batch
-        }
-        markup = get_keyboard_markup(
-            batch,
-            current_words.values(),
-            ["/cancel", "/exit", "/next"]
-        )
-        message = bot.send_message(
-            message.chat.id,
-            texts.group_edit_choose.format(
-                action,
-                group_name,
-                batch_num + 1,
-                n_batches
-            ),
-            reply_markup=markup
-        )
-        bot.register_next_step_handler(
-            message, CallbackLogger(process_words_batch),
-            language=language, group_id=group_id, group_name=group_name,
-            all_words=all_words, current_words=current_words, chosen_words=chosen_words,
-            batch_num=batch_num, batch_size=batch_size, action=action
-        )
-    elif message.text == "/exit":
-        for word, mask in current_words.items():
-            if action == "add" and mask == 1:
-                chosen_words.add(word)
-            if action == "delete" and mask == 0:
-                chosen_words.add(word)
-        n_edited_words = save_words_edit_to_group(message.chat.id, language, group_id, chosen_words, action)
-        bot.reply_to(
-            message,
-            texts.group_edit_finished.format(group_name, action, n_edited_words, "\n".join(sorted(list(chosen_words)))),
-            reply_markup=empty_markup
-        )
-        return
-    elif message.text == "/cancel":
-        bot.reply_to(message, texts.group_edit_cancelled, reply_markup=empty_markup)
-        return
-    elif message.text == "/next":
-        batch_num += 1
-        
-        for word, mask in current_words.items():
-            if action == "add" and mask == 1:
-                chosen_words.add(word)
-            if action == "delete" and mask == 0:
-                chosen_words.add(word)
-
-        if batch_num * batch_size >= len(all_words):
-            n_edited_words = save_words_edit_to_group(message.chat.id, language, group_id, chosen_words, action)
-            bot.reply_to(
-                message,
-                texts.group_edit_no_more_words.format(
-                    group_name,
-                    action,
-                    n_edited_words,
-                    "\n".join(sorted(list(chosen_words)))
-                ),
-                reply_markup=empty_markup
-            )
-            return
-        
-        CallbackLogger(process_words_batch)(
-            message, language=language,
-            group_id=group_id, group_name=group_name,
-            all_words=all_words, current_words=None,
-            batch_num=batch_num, batch_size=batch_size,
-            chosen_words=chosen_words, is_start=True,
-            action=action
-        )
-
-    elif get_word_from_group_action(message.text[1:]) in current_words:
-        word = get_word_from_group_action(message.text[1:])
-        current_words[word] = (current_words[word] + 1) % 2
-        markup = get_keyboard_markup(
-            batch,
-            current_words.values(),
-            ["/cancel", "/exit", "/next"]
-        )
-        ok_message = bot.send_message(message.chat.id, "Ok!", reply_markup=markup)
-        bot.register_next_step_handler(
-            message, CallbackLogger(process_words_batch),
-            language=language, group_id=group_id, group_name=group_name,
-            all_words=all_words, current_words=current_words,
-            batch_num=batch_num, batch_size=batch_size, ok_message=ok_message,
-            chosen_words=chosen_words,
-            action=action
-        )
-        bot.delete_message(message.chat.id, message.id)
-    else:
-        bot.reply_to(message, texts.group_edit_unknown_word)
-        bot.register_next_step_handler(message, CallbackLogger(process_words_batch),
-                                    language=language, group_id=group_id, group_name=group_name,
-                                    all_words=all_words, current_words=current_words, chosen_words=chosen_words,
-                                    batch_num=batch_num, batch_size=batch_size, action=action)
-
-
-def process_choose_group_to_add_words(message, language):
-    if message.text == "/exit":
-        bot.reply_to(message, texts.exited, reply_markup=empty_markup)
-        return
-    
-    groups = db_model.get_group_by_name(pool, message.chat.id, language, message.text)
-    
-    if len(groups) == 0:
-        bot.reply_to(message, texts.no_such_group.format("/group_add_words"),
-                        reply_markup=empty_markup)
-        return
-    
-    if not groups[0]["is_creator"]:
-        bot.reply_to(message, texts.group_not_a_creator,
-                        reply_markup=empty_markup)
-        return
-    
-    group_id = groups[0]["group_id"].decode("utf-8")
-    group_name = groups[0]["group_name"].decode("utf-8")
-    
-    vocabulary = db_model.get_full_vocab(pool, message.chat.id, language)
-    words_in_group = set([entry["word"] for entry in db_model.get_group_contents(pool, group_id)])
-    
-    words_to_add = []
-    for entry in vocabulary:
-        if entry["word"] in words_in_group:
-            continue
-        words_to_add.append(entry)
-
-    
-    if len(words_to_add) == 0:
-        bot.reply_to(message, texts.group_edit_full)
-        return
-    
-    markup = types.ReplyKeyboardMarkup(row_width=4, one_time_keyboard=True, resize_keyboard=True)
-    markup.add(*options.group_add_words_sort_options, row_width=4)
-    markup.add(telebot.types.KeyboardButton("/exit"))
-    
-    reply_message = bot.send_message(message.chat.id, texts.choose_sorting, reply_markup=markup)
-    bot.register_next_step_handler(
-        reply_message, CallbackLogger(process_choose_sorting_to_add_words),
-        language=language, group_id=group_id,
-        group_name=group_name, vocabulary=words_to_add
-    )
-        
-
-def process_choose_sorting_to_add_words(message, language, group_id, group_name, vocabulary):
-    if message.text == "/exit":
-        bot.reply_to(message, texts.exited, reply_markup=empty_markup)
-        return
-    
-    if message.text not in options.group_add_words_sort_options:
-        bot.reply_to(message, texts.sorting_not_supported.format("/group_add_words"), reply_markup=empty_markup)
-        return
-    
-    if message.text == "a-z":
-        vocabulary = sorted(vocabulary, key=lambda x: x["translation"])
-    elif message.text == "time added ⬇️":
-        vocabulary = sorted(vocabulary, key=lambda x: x["added_timestamp"])[::-1]
-
-    CallbackLogger(process_words_batch)(
-        message, language=language, group_id=group_id, group_name=group_name,
-        all_words=vocabulary, current_words=None, chosen_words=set(),
-        batch_num=0, batch_size=10, is_start=True
-    )
 
 
 @bot.message_handler(commands=["group_delete_words"])

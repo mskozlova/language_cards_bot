@@ -103,8 +103,8 @@ add_words_translate = "Translate {}"
 # /create_group
 create_group_name = (
     "Write new group name. It should consist only of latin letters, digits and underscores.\n"
-    "For example, 'nouns_type_3'"
-    ""
+    "For example, 'nouns_type_3'\n"
+    "\n"
     "Use /cancel to exit the process."
 )
 
@@ -115,7 +115,7 @@ group_created = "Group is created! Now add some words: /group_add_words"
 # sorting
 choose_sorting = "Choose sorting:"
 
-sorting_not_supported = "This sorting is not supported. Try again {}"
+sorting_not_supported = "This sorting is not supported. Choose a valid option:"
 
 # misc
 exited = "Exited!"
@@ -142,7 +142,7 @@ no_groups_yet = "You don't have any groups yet, try /create_group"
 
 group_choose = "Choose one of your groups"
 
-no_such_group = "You don't have a group with that name, try again {}"
+no_such_group = "You don't have a group with that name, choose again."
 
 show_group_done = "Finished group showing!"
 
@@ -158,13 +158,17 @@ delete_group_cancel = "Cancelled group deletion!"
 delete_group_success = "👍 Group '{}' successfully deleted! /show_groups"
 
 # group_edit
+group_add_choose = "Select words, page {} of {}."
+
+group_add_confirm = "✅ㅤ" # invisible symbol to avoid large emoji
+
 group_edit_choose = "Choose words to {}. Group '{}', page {} out of {}"
 
 group_edit_finished = "Finished!\nEdited group {}: {} {} word(s).\n\n{}"
 
 group_edit_cancelled = "Cancelled! Group was not edited."
 
-group_edit_no_more_words = "That's all the words we have!\nEdited group {}: {} {} word(s).\n\n{}"
+group_edit_no_more_words = "That's all the words we have!"
 
 group_edit_unknown_word = "Not a word from the list, ignoring that."
 

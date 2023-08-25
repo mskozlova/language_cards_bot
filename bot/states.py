@@ -126,13 +126,23 @@ class ShowWordsState(StatesGroup):
     show_words = State()
 
 
-class DeleteLanguage(StatesGroup):
+class DeleteLanguageState(StatesGroup):
     init = State()
 
 
-class DeleteWords(StatesGroup):
+class DeleteWordsState(StatesGroup):
     init = State()
 
 
 class CreateGroupState(StatesGroup):
+    init = State()
+
+
+class AddGroupWordsState(StatesGroup):
+    choose_group = State()
+    choose_sorting = State()
+    choose_words = State()
+
+
+class ShowGroupsState(StatesGroup):
     init = State()
