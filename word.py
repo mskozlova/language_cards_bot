@@ -102,7 +102,13 @@ def format_word_for_group_action(db):
 
 
 def get_word_from_group_action(word):
-    return word.split(" - ")[1]
+    return word[1:].split(" - ")[1]
+
+
+def get_word_idx(vocabulary, word):
+    for i, entry in enumerate(vocabulary):
+        if entry["word"] == word:
+            return i
 
 
 class Word:
