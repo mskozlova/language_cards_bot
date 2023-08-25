@@ -12,7 +12,7 @@ def handle_language_not_set(message, bot):
 
 
 @logged_execution
-def suggest_group_choises(message, bot, next_state):
+def suggest_group_choices(message, bot, next_state):
     language = db_model.get_current_language(pool, message.chat.id)
     if language is None:
         handle_language_not_set(message, bot)
@@ -25,13 +25,13 @@ def suggest_group_choises(message, bot, next_state):
         bot.reply_to(message, texts.no_groups_yet)
         return
     
+    bot.set_state(message.from_user.id, next_state, message.chat.id)
     with bot.retrieve_data(message.from_user.id, message.chat.id) as data:
         data["language"] = language
         data["group_names"] = group_names
     
     markup = keyboards.get_reply_keyboard(group_names, ["/exit"], row_width=3)
     
-    bot.set_state(message.from_user.id, next_state, message.chat.id)
     bot.send_message(
         message.chat.id,
         texts.group_choose,

@@ -449,7 +449,7 @@ def process_group_creation(message, bot):
 
 @logged_execution
 def handle_show_groups(message, bot):
-    utils.suggest_group_choises(message, bot, states.ShowGroupsState.init)
+    utils.suggest_group_choices(message, bot, states.ShowGroupsState.init)
 
 
 @logged_execution
@@ -490,7 +490,7 @@ def process_show_group_contents(message, bot):
 # TODO: delete all unnecessary messages
 @logged_execution
 def handle_group_add_words(message, bot):
-    utils.suggest_group_choises(message, bot, states.AddGroupWordsState.choose_group)
+    utils.suggest_group_choices(message, bot, states.AddGroupWordsState.choose_group)
     
 
 @logged_execution
@@ -609,7 +609,6 @@ def process_choose_sorting_to_add_words(message, bot):
 
 @logged_execution
 def handle_choose_group_to_add_words(message, bot):
-    # TODO: exception cannot access local variable 'language' where it is not associated with a value
     with bot.retrieve_data(message.from_user.id, message.chat.id) as data:
         language = data["language"]
         group_names = data["group_names"]
@@ -657,3 +656,72 @@ def handle_choose_group_to_add_words(message, bot):
         texts.choose_sorting,
         reply_markup=keyboards.get_reply_keyboard(options.group_add_words_sort_options, ["/exit"])
     )
+
+
+# delete group
+
+@logged_execution
+def handle_delete_group(message, bot):
+    utils.suggest_group_choices(message, bot, states.DeleteGroupState.select_group)
+
+
+@logged_execution
+def process_group_deletion_check_sure(message, bot):
+    with bot.retrieve_data(message.from_user.id, message.chat.id) as data:
+        language = data["language"]
+    
+    groups = db_model.get_group_by_name(pool, message.chat.id, language, message.text)
+    
+    if len(groups) == 0:
+        bot.reply_to(message, texts.no_such_group)
+        utils.suggest_group_choices(message, bot, states.DeleteGroupState.select_group)
+        return
+
+    group_id = groups[0]["group_id"].decode("utf-8")
+    group_name = groups[0]["group_name"].decode("utf-8")
+    is_creator = groups[0]["is_creator"]
+    
+    if not groups[0]["is_creator"]:
+        bot.delete_state(message.from_user.id, message.chat.id)
+        bot.reply_to(message, texts.group_not_a_creator, reply_markup=keyboards.empty)
+        return
+    
+    bot.set_state(message.from_user.id, states.DeleteGroupState.are_you_sure, message.chat.id)
+    with bot.retrieve_data(message.from_user.id, message.chat.id) as data:
+        data["group_name"] = group_name
+        data["group_id"] = group_id
+        data["is_creator"] = is_creator
+    
+    markup = keyboards.get_reply_keyboard(options.delete_are_you_sure)
+    bot.send_message(
+        message.chat.id,
+        texts.delete_group_warning.format(group_name, language),
+        reply_markup=markup
+    )
+
+
+@logged_execution
+def process_group_deletion(message, bot):
+    # TODO: when sharing think of local / global deletions (use is_creator)
+    with bot.retrieve_data(message.from_user.id, message.chat.id) as data:
+        group_name = data["group_name"]
+        group_id = data["group_id"]
+        # is_creator = data["is_creator"]
+    
+    if message.text not in options.delete_are_you_sure:
+        markup = keyboards.get_reply_keyboard(options.delete_are_you_sure)
+        bot.reply_to(message, texts.unknown_command_short, reply_markup=markup)
+        return
+    
+    bot.delete_state(message.from_user.id, message.chat.id)
+    
+    if not options.delete_are_you_sure[message.text]:
+        bot.send_message(
+            message.chat.id, texts.delete_group_cancel,
+            reply_markup=keyboards.empty
+        )
+        return
+    
+    db_model.delete_group(pool, group_id)
+    bot.delete_state(message.from_user.id, message.chat.id)
+    bot.send_message(message.chat.id, texts.delete_group_success.format(group_name))

@@ -88,15 +88,27 @@ bot.register_message_handler(handlers.process_group_creation,
                              state=bot_states.CreateGroupState.init,
                              pass_bot=True)
 
+bot.register_message_handler(handlers.handle_delete_group, commands=["delete_group"], pass_bot=True)
+bot.register_message_handler(handlers.process_exit,
+                             commands=["exit"],
+                             state=bot_states.DeleteGroupState.select_group,
+                             pass_bot=True)
+bot.register_message_handler(handlers.process_group_deletion_check_sure,
+                             state=bot_states.DeleteGroupState.select_group,
+                             pass_bot=True)
+bot.register_message_handler(handlers.process_group_deletion,
+                             state=bot_states.DeleteGroupState.are_you_sure,
+                             pass_bot=True)
+
 bot.register_message_handler(handlers.handle_show_groups, commands=["show_groups"], pass_bot=True)
 bot.register_message_handler(handlers.process_exit, commands=["exit"], state=bot_states.ShowGroupsState.init, pass_bot=True)
 bot.register_message_handler(handlers.process_show_group_contents, state=bot_states.ShowGroupsState.init, pass_bot=True)
 
 bot.register_message_handler(handlers.handle_group_add_words, commands=["group_add_words"], pass_bot=True)
-bot.register_message_handler(handlers.handle_choose_group_to_add_words, state=bot_states.AddGroupWordsState.choose_group, pass_bot=True)
 bot.register_message_handler(handlers.process_exit, commands=["exit"], state=bot_states.AddGroupWordsState.choose_group, pass_bot=True)
-bot.register_message_handler(handlers.process_choose_sorting_to_add_words, state=bot_states.AddGroupWordsState.choose_sorting, pass_bot=True)
+bot.register_message_handler(handlers.handle_choose_group_to_add_words, state=bot_states.AddGroupWordsState.choose_group, pass_bot=True)
 bot.register_message_handler(handlers.process_exit, commands=["exit"], state=bot_states.AddGroupWordsState.choose_sorting, pass_bot=True)
+bot.register_message_handler(handlers.process_choose_sorting_to_add_words, state=bot_states.AddGroupWordsState.choose_sorting, pass_bot=True)
 bot.register_message_handler(handlers.process_cancel, commands=["cancel"], state=bot_states.AddGroupWordsState.choose_words, pass_bot=True)
 bot.register_message_handler(handlers.process_save_group_edit, commands=["exit"], state=bot_states.AddGroupWordsState.choose_words, pass_bot=True)
 bot.register_message_handler(handlers.process_choose_words_batch_for_group_next, commands=["next"], state=bot_states.AddGroupWordsState.choose_words, pass_bot=True)
@@ -108,78 +120,6 @@ if os.getenv("IS_TESTING") is not None:
 
 def handle_language_not_set(message, bot):
     bot.send_message(message.chat.id, texts.no_language_is_set)
-
-
-@bot.message_handler(commands=["delete_group"])
-@logged_execution
-def handle_delete_group(message):
-    current_language = db_model.get_current_language(pool, message.chat.id)
-    if current_language is None:
-        handle_language_not_set(message)
-        return
-
-    reply_message = CallbackLogger(process_show_groups)(message, current_language)
-    bot.register_next_step_handler(
-        reply_message,
-        CallbackLogger(process_group_deletion_check_sure),
-        language=current_language
-    )
-
-
-def process_group_deletion_check_sure(message, language):
-    if message.text == "/exit":
-        bot.reply_to(message, texts.exited, reply_markup=empty_markup)
-        return
-    
-    groups = db_model.get_group_by_name(pool, message.chat.id, language, message.text)
-    
-    if len(groups) == 0:
-        bot.reply_to(message, texts.no_such_group.format("/delete_group"),
-                     reply_markup=empty_markup)
-        return
-    
-    if not groups[0]["is_creator"]:
-        bot.reply_to(message, texts.group_not_a_creator,
-                        reply_markup=empty_markup)
-        return
-    
-    group_id = groups[0]["group_id"].decode("utf-8")
-    group_name = groups[0]["group_name"].decode("utf-8")
-    
-    markup = types.ReplyKeyboardMarkup(
-        row_width=len(options.delete_are_you_sure),
-        resize_keyboard=True, one_time_keyboard=True
-    )
-    markup.add(*options.delete_are_you_sure.keys(), row_width=len(options.delete_are_you_sure))
-    bot.send_message(
-        message.chat.id,
-        texts.delete_group_warning.format(group_name, language),
-        reply_markup=markup
-    )
-    # TODO: maybe delete words, too?
-    bot.register_next_step_handler(
-        message, CallbackLogger(process_group_deletion),
-        language=language, group_id=group_id,
-        group_name=group_name, is_creator=groups[0]["is_creator"]
-    )
-
-
-def process_group_deletion(message, language, group_id, group_name, is_creator):
-    # TODO: when sharing think of local / global deletions (use is_creator)
-    if message.text not in options.delete_are_you_sure:
-        bot.reply_to(message, texts.unknown_command.format("/delete_group"),
-                    reply_markup=empty_markup)
-        return
-    
-    if not options.delete_are_you_sure[message.text]:
-        bot.send_message(
-            message.chat.id, texts.delete_group_cancel,
-            reply_markup=empty_markup
-        )
-        return
-    
-    db_model.delete_group(pool, group_id)
-    bot.send_message(message.chat.id, texts.delete_group_success.format(group_name))
 
 
 @bot.message_handler(commands=["group_delete_words"])
