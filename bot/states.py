@@ -149,5 +149,11 @@ class AddGroupWordsState(StatesGroup):
     choose_words = State()
 
 
+class DeleteGroupWordsState(StatesGroup):
+    choose_group = State()
+    choose_sorting = State()
+    choose_words = State()
+
+
 class ShowGroupsState(StatesGroup):
     init = State()

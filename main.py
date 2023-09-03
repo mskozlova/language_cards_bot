@@ -114,6 +114,17 @@ bot.register_message_handler(handlers.process_save_group_edit, commands=["exit"]
 bot.register_message_handler(handlers.process_choose_words_batch_for_group_next, commands=["next"], state=bot_states.AddGroupWordsState.choose_words, pass_bot=True)
 bot.register_message_handler(handlers.process_choose_words_batch_for_group, state=bot_states.AddGroupWordsState.choose_words, pass_bot=True)
 
+bot.register_message_handler(handlers.handle_group_delete_words, commands=["group_delete_words"], pass_bot=True)
+bot.register_message_handler(handlers.process_exit, commands=["exit"], state=bot_states.DeleteGroupWordsState.choose_group, pass_bot=True)
+bot.register_message_handler(handlers.handle_choose_group_to_delete_words, state=bot_states.DeleteGroupWordsState.choose_group, pass_bot=True)
+bot.register_message_handler(handlers.process_exit, commands=["exit"], state=bot_states.DeleteGroupWordsState.choose_sorting, pass_bot=True)
+bot.register_message_handler(handlers.process_choose_sorting_to_delete_words, state=bot_states.DeleteGroupWordsState.choose_sorting, pass_bot=True)
+bot.register_message_handler(handlers.process_cancel, commands=["cancel"], state=bot_states.DeleteGroupWordsState.choose_words, pass_bot=True)
+bot.register_message_handler(handlers.process_save_group_edit, commands=["exit"], state=bot_states.DeleteGroupWordsState.choose_words, pass_bot=True)
+bot.register_message_handler(handlers.process_choose_words_batch_for_group_next, commands=["next"], state=bot_states.DeleteGroupWordsState.choose_words, pass_bot=True)
+bot.register_message_handler(handlers.process_choose_words_batch_for_group, state=bot_states.DeleteGroupWordsState.choose_words, pass_bot=True)
+
+
 # TODO: get rid of testing commands!
 if os.getenv("IS_TESTING") is not None:
     bot.register_message_handler(test_handlers.handle_clear_db, commands=["clear_db"], pass_bot=True)
@@ -122,52 +133,52 @@ def handle_language_not_set(message, bot):
     bot.send_message(message.chat.id, texts.no_language_is_set)
 
 
-@bot.message_handler(commands=["group_delete_words"])
-@logged_execution
-def handle_group_delete_words(message):
-    current_language = db_model.get_current_language(pool, message.chat.id)
-    reply_message = CallbackLogger(process_show_groups)(message, current_language)
-    bot.register_next_step_handler(
-        reply_message,
-        CallbackLogger(process_choose_group_to_delete_words),
-        language=current_language
-    )
+# @bot.message_handler(commands=["group_delete_words"])
+# @logged_execution
+# def handle_group_delete_words(message):
+#     current_language = db_model.get_current_language(pool, message.chat.id)
+#     reply_message = CallbackLogger(process_show_groups)(message, current_language)
+#     bot.register_next_step_handler(
+#         reply_message,
+#         CallbackLogger(process_choose_group_to_delete_words),
+#         language=current_language
+#     )
 
 
-def process_choose_group_to_delete_words(message, language):
-    if message.text == "/exit":
-        bot.reply_to(message, texts.exited, reply_markup=empty_markup)
-        return
+# def process_choose_group_to_delete_words(message, language):
+#     if message.text == "/exit":
+#         bot.reply_to(message, texts.exited, reply_markup=empty_markup)
+#         return
     
-    groups = db_model.get_group_by_name(pool, message.chat.id, language, message.text)
+#     groups = db_model.get_group_by_name(pool, message.chat.id, language, message.text)
     
-    if len(groups) == 0:
-        bot.reply_to(message, texts.no_such_group.format("/group_delete_words"),
-                        reply_markup=empty_markup)
-        return
+#     if len(groups) == 0:
+#         bot.reply_to(message, texts.no_such_group.format("/group_delete_words"),
+#                         reply_markup=empty_markup)
+#         return
     
-    if not groups[0]["is_creator"]:
-        bot.reply_to(message, texts.group_not_a_creator,
-                        reply_markup=empty_markup)
-        return
+#     if not groups[0]["is_creator"]:
+#         bot.reply_to(message, texts.group_not_a_creator,
+#                         reply_markup=empty_markup)
+#         return
     
-    group_id = groups[0]["group_id"].decode("utf-8")
-    group_name = groups[0]["group_name"].decode("utf-8")
+#     group_id = groups[0]["group_id"].decode("utf-8")
+#     group_name = groups[0]["group_name"].decode("utf-8")
     
-    words_in_group = sorted(
-        db_model.get_group_contents(pool, group_id),
-        key=lambda entry: entry["translation"]
-    )
+#     words_in_group = sorted(
+#         db_model.get_group_contents(pool, group_id),
+#         key=lambda entry: entry["translation"]
+#     )
     
-    if len(words_in_group) == 0:
-        bot.reply_to(message, texts.group_edit_empty)
-        return
+#     if len(words_in_group) == 0:
+#         bot.reply_to(message, texts.group_edit_empty)
+#         return
 
-    CallbackLogger(process_words_batch)(
-        message, language=language, group_id=group_id, group_name=group_name,
-        all_words=words_in_group, current_words=dict(), chosen_words=set(),
-        batch_num=0, batch_size=10, is_start=True, action="delete"
-    )
+#     CallbackLogger(process_words_batch)(
+#         message, language=language, group_id=group_id, group_name=group_name,
+#         all_words=words_in_group, current_words=dict(), chosen_words=set(),
+#         batch_num=0, batch_size=10, is_start=True, action="delete"
+#     )
 
 
 @bot.message_handler(commands=["train"])

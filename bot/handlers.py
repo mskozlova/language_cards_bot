@@ -491,6 +491,82 @@ def process_show_group_contents(message, bot):
 @logged_execution
 def handle_group_add_words(message, bot):
     utils.suggest_group_choices(message, bot, states.AddGroupWordsState.choose_group)
+
+
+@logged_execution
+def handle_choose_group_to_add_words(message, bot):
+    with bot.retrieve_data(message.from_user.id, message.chat.id) as data:
+        language = data["language"]
+        group_names = data["group_names"]
+    
+    groups = db_model.get_group_by_name(pool, message.chat.id, language, message.text)
+    markup = keyboards.get_reply_keyboard(group_names, ["/exit"], row_width=3)
+    
+    if len(groups) != 1:
+        bot.reply_to(message, texts.no_such_group, reply_markup=markup)
+        return
+
+    if not groups[0]["is_creator"]:
+        bot.delete_state(message.from_user.id, message.chat.id)
+        bot.reply_to(message, texts.group_not_a_creator, reply_markup=keyboards.empty)
+        return
+    
+    group_id = groups[0]["group_id"].decode("utf-8")
+    vocabulary = db_model.get_full_vocab(pool, message.chat.id, language)
+    words_in_group = set([entry["word"] for entry in db_model.get_group_contents(pool, group_id)])
+    
+    words_to_add = []
+    for entry in vocabulary:
+        if entry["word"] in words_in_group:
+            continue
+        words_to_add.append(entry)
+
+    if len(words_to_add) == 0:
+        bot.delete_state(message.from_user.id, message.chat.id)
+        bot.reply_to(message, texts.group_edit_full)
+        return
+
+    with bot.retrieve_data(message.from_user.id, message.chat.id) as data:
+        data["vocabulary"] = words_to_add
+        data["masks"] = [0] * len(words_to_add)
+        data["batch_number"] = 0
+        data["is_start"] = True
+        data["batch_size"] = constants.GROUP_ADD_WORDS_BATCH_SIZE
+        data["group_id"] = group_id
+        data["group_name"] = message.text
+        data["action"] = "add"
+
+    bot.set_state(message.from_user.id, states.AddGroupWordsState.choose_sorting, message.chat.id)
+    bot.send_message(
+        message.chat.id,
+        texts.choose_sorting,
+        reply_markup=keyboards.get_reply_keyboard(options.group_add_words_sort_options, ["/exit"])
+    )
+
+
+@logged_execution
+def process_choose_sorting_to_add_words(message, bot):
+    with bot.retrieve_data(message.from_user.id, message.chat.id) as data:
+        vocabulary = data["vocabulary"]
+    
+    if message.text not in options.group_add_words_sort_options:
+        markup = keyboards.get_reply_keyboard(options.group_add_words_sort_options, ["/exit"])
+        bot.reply_to(
+            message,
+            texts.sorting_not_supported,
+            reply_markup=markup
+        )
+        return
+    
+    if message.text == "a-z":
+        vocabulary = sorted(vocabulary, key=lambda x: x["translation"])
+    elif message.text == "time added ⬇️":
+        vocabulary = sorted(vocabulary, key=lambda x: x["added_timestamp"])[::-1]
+
+    with bot.retrieve_data(message.from_user.id, message.chat.id) as data:
+        data["vocabulary"] = vocabulary
+    bot.set_state(message.from_user.id, states.AddGroupWordsState.choose_words, message.chat.id)
+    process_choose_words_batch_for_group(message, bot)
     
 
 @logged_execution
@@ -547,6 +623,8 @@ def process_choose_words_batch_for_group(message, bot):
         batch_number = data["batch_number"]
         is_start = data["is_start"]
         batch_size = data["batch_size"]
+        action = data["action"]
+        group_name = data["group_name"]
 
     n_batches = utils.get_number_of_batches(constants.GROUP_ADD_WORDS_BATCH_SIZE, len(vocabulary))
 
@@ -562,7 +640,7 @@ def process_choose_words_batch_for_group(message, bot):
     if is_start:
         bot.send_message(
             message.chat.id,
-            texts.group_add_choose.format(batch_number + 1, n_batches),
+            texts.group_edit_choose.format(action, group_name, batch_number + 1, n_batches),
             reply_markup=markup
         )
         with bot.retrieve_data(message.from_user.id, message.chat.id) as data:
@@ -576,14 +654,66 @@ def process_choose_words_batch_for_group(message, bot):
         batch_mask[word_idx] = (batch_mask[word_idx] + 1) % 2
         
         markup = keyboards.get_masked_choices(batch, batch_mask, additional_commands=additional_commands)
-        bot.send_message(message.chat.id, texts.group_add_confirm, reply_markup=markup)
+        bot.send_message(message.chat.id, texts.group_edit_confirm, reply_markup=markup)
         
         masks[batch_number * constants.GROUP_ADD_WORDS_BATCH_SIZE + word_idx] = batch_mask[word_idx]
         with bot.retrieve_data(message.from_user.id, message.chat.id) as data:
             data["masks"] = masks
 
 
-def process_choose_sorting_to_add_words(message, bot):
+# group delete words
+@logged_execution
+def handle_group_delete_words(message, bot):
+    utils.suggest_group_choices(message, bot, states.DeleteGroupWordsState.choose_group)
+
+
+@logged_execution
+def handle_choose_group_to_delete_words(message, bot):
+    with bot.retrieve_data(message.from_user.id, message.chat.id) as data:
+        language = data["language"]
+        group_names = data["group_names"]
+    
+    groups = db_model.get_group_by_name(pool, message.chat.id, language, message.text)
+    markup = keyboards.get_reply_keyboard(group_names, ["/exit"], row_width=3)
+    
+    if len(groups) != 1:
+        bot.reply_to(message, texts.no_such_group, reply_markup=markup)
+        return
+
+    if not groups[0]["is_creator"]:
+        bot.delete_state(message.from_user.id, message.chat.id)
+        bot.reply_to(message, texts.group_not_a_creator, reply_markup=keyboards.empty)
+        return
+    
+    group_id = groups[0]["group_id"].decode("utf-8")
+    words_in_group = db_model.get_group_contents(pool, group_id)
+    
+    if len(words_in_group) == 0:
+        bot.delete_state(message.from_user.id, message.chat.id)
+        bot.reply_to(message, texts.group_edit_empty)
+        return
+
+    with bot.retrieve_data(message.from_user.id, message.chat.id) as data:
+        data["vocabulary"] = words_in_group
+        data["masks"] = [1] * len(words_in_group)
+        data["batch_number"] = 0
+        data["is_start"] = True
+        data["batch_size"] = constants.GROUP_ADD_WORDS_BATCH_SIZE
+        data["group_id"] = group_id
+        data["group_name"] = message.text
+        data["action"] = "delete"
+
+    bot.set_state(message.from_user.id, states.DeleteGroupWordsState.choose_sorting, message.chat.id)
+    bot.send_message(
+        message.chat.id,
+        texts.choose_sorting,
+        reply_markup=keyboards.get_reply_keyboard(options.group_add_words_sort_options, ["/exit"])
+    )
+
+
+# TODO: merge with process_choose_sorting_to_add_words, only state is different
+@logged_execution
+def process_choose_sorting_to_delete_words(message, bot):
     with bot.retrieve_data(message.from_user.id, message.chat.id) as data:
         vocabulary = data["vocabulary"]
     
@@ -603,59 +733,8 @@ def process_choose_sorting_to_add_words(message, bot):
 
     with bot.retrieve_data(message.from_user.id, message.chat.id) as data:
         data["vocabulary"] = vocabulary
-    bot.set_state(message.from_user.id, states.AddGroupWordsState.choose_words, message.chat.id)
+    bot.set_state(message.from_user.id, states.DeleteGroupWordsState.choose_words, message.chat.id)
     process_choose_words_batch_for_group(message, bot)
-
-
-@logged_execution
-def handle_choose_group_to_add_words(message, bot):
-    with bot.retrieve_data(message.from_user.id, message.chat.id) as data:
-        language = data["language"]
-        group_names = data["group_names"]
-    
-    groups = db_model.get_group_by_name(pool, message.chat.id, language, message.text)
-    markup = keyboards.get_reply_keyboard(group_names, ["/exit"], row_width=3)
-    
-    if len(groups) != 1:
-        bot.reply_to(message, texts.no_such_group, reply_markup=markup)
-        return
-
-    if not groups[0]["is_creator"]:
-        bot.delete_state(message.from_user.id, message.chat.id)
-        bot.reply_to(message, texts.group_not_a_creator, reply_markup=keyboards.empty)
-        return
-    
-    group_id = groups[0]["group_id"].decode("utf-8")
-    vocabulary = db_model.get_full_vocab(pool, message.chat.id, language)
-    words_in_group = set([entry["word"] for entry in db_model.get_group_contents(pool, group_id)])
-    
-    words_to_add = []
-    for entry in vocabulary:
-        if entry["word"] in words_in_group:
-            continue
-        words_to_add.append(entry)
-
-    if len(words_to_add) == 0:
-        bot.delete_state(message.from_user.id, message.chat.id)
-        bot.reply_to(message, texts.group_edit_full)
-        return
-
-    with bot.retrieve_data(message.from_user.id, message.chat.id) as data:
-        data["vocabulary"] = words_to_add
-        data["masks"] = [0] * len(words_to_add)
-        data["batch_number"] = 0
-        data["is_start"] = True
-        data["batch_size"] = constants.GROUP_ADD_WORDS_BATCH_SIZE
-        data["group_id"] = group_id
-        data["group_name"] = message.text
-        data["action"] = "add"
-
-    bot.set_state(message.from_user.id, states.AddGroupWordsState.choose_sorting, message.chat.id)
-    bot.send_message(
-        message.chat.id,
-        texts.choose_sorting,
-        reply_markup=keyboards.get_reply_keyboard(options.group_add_words_sort_options, ["/exit"])
-    )
 
 
 # delete group
