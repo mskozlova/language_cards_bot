@@ -158,9 +158,9 @@ delete_group_cancel = "Cancelled group deletion!"
 delete_group_success = "👍 Group '{}' successfully deleted! /show_groups"
 
 # group_edit
-group_add_choose = "Select words, page {} of {}."
+# group_edit_choose = "Select words, page {} of {}."
 
-group_add_confirm = "✅ㅤ" # invisible symbol to avoid large emoji
+group_edit_confirm = "✅ㅤ" # invisible symbol to avoid large emoji
 
 group_edit_choose = "Choose words to {}. Group '{}', page {} out of {}"
 
