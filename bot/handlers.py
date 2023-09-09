@@ -4,7 +4,7 @@ import json
 import database.model as db_model
 from database.ydb_settings import pool
 from logs import logger, logged_execution
-from user_interaction import options, texts
+from user_interaction import config, options, texts
 import word as word_utils
 
 from bot import constants, keyboards, states, utils
@@ -13,14 +13,24 @@ from bot import constants, keyboards, states, utils
 # common
 @logged_execution
 def process_exit(message, bot):
+    exit_message = bot.send_message(message.chat.id, texts.exited, reply_markup=keyboards.empty)
+    
+    with bot.retrieve_data(message.from_user.id, message.chat.id) as data:
+        if "init_message" in data:
+            utils.clear_history(bot, message.chat.id, data["init_message"], exit_message.id)
+            
     bot.delete_state(message.from_user.id, message.chat.id)
-    bot.reply_to(message, texts.exited)
 
 
 @logged_execution
 def process_cancel(message, bot):
+    cancel_message = bot.send_message(message.chat.id, texts.cancel_short, reply_markup=keyboards.empty)
+    
+    with bot.retrieve_data(message.from_user.id, message.chat.id) as data:
+        if "init_message" in data:
+            utils.clear_history(bot, message.chat.id, data["init_message"], cancel_message.id)
+            
     bot.delete_state(message.from_user.id, message.chat.id)
-    bot.send_message(message.chat.id, texts.cancel_short, reply_markup=keyboards.empty)
 
 
 # TODO: add user to db after hitting /help or /start
@@ -804,3 +814,173 @@ def process_group_deletion(message, bot):
     db_model.delete_group(pool, group_id)
     bot.delete_state(message.from_user.id, message.chat.id)
     bot.send_message(message.chat.id, texts.delete_group_success.format(group_name))
+
+
+# TRAIN
+
+@logged_execution
+def handle_train(message, bot):
+    language = db_model.get_current_language(pool, message.chat.id)
+    if language is None:
+        utils.handle_language_not_set(message, bot)
+        return
+
+    markup = keyboards.get_reply_keyboard(options.train_strategy_options, ["/cancel"])
+    reply_message = bot.send_message(
+        message.chat.id,
+        texts.training_init,
+        reply_markup=markup
+    )
+    
+    bot.set_state(message.from_user.id, states.TrainState.choose_strategy, message.chat.id)
+    with bot.retrieve_data(message.from_user.id, message.chat.id) as data:
+        data["language"] = language
+        data["init_message"] = reply_message.id
+
+
+@logged_execution
+def init_direction_choice(message, bot):
+    markup = keyboards.get_reply_keyboard(options.train_direction_options, ["/cancel"])
+    bot.send_message(
+        message.chat.id,
+        texts.training_direction,
+        reply_markup=markup
+    )
+    bot.set_state(message.from_user.id, states.TrainState.choose_direction, message.chat.id)
+    
+
+@logged_execution
+def process_choose_strategy(message, bot):
+    if message.text not in options.train_strategy_options:
+        markup = keyboards.get_reply_keyboard(options.train_strategy_options, ["/cancel"])
+        bot.reply_to(message, texts.training_strategy_unknown, reply_markup=markup)
+        return
+    
+    if message.text == "group":
+        utils.suggest_group_choices(message, bot, states.TrainState.choose_group)
+    else:
+        # bot.set_state(message.from_user.id, states.TrainState.choose_direction, message.chat.id)
+        init_direction_choice(message, bot)
+
+    with bot.retrieve_data(message.from_user.id, message.chat.id) as data:
+        data["strategy"] = message.text
+
+
+@logged_execution
+def process_choose_group_for_training(message, bot):
+    with bot.retrieve_data(message.from_user.id, message.chat.id) as data:
+        language = data["language"]
+    
+    groups = db_model.get_group_by_name(
+        pool, message.chat.id, language, message.text
+    )
+    
+    if len(groups) == 0:
+        bot.reply_to(message, texts.no_such_group.format("/train"), reply_markup=keyboards.empty)
+        utils.suggest_group_choices(message, bot, states.TrainState.choose_group)
+        return
+
+    group_id = groups[0]["group_id"].decode("utf-8")
+    group_name = message.text
+    init_direction_choice(message, bot)
+    
+    with bot.retrieve_data(message.from_user.id, message.chat.id) as data:
+        data["group_id"] = group_id
+        data["group_name"] = group_name
+
+
+@logged_execution
+def process_choose_direction(message, bot):
+    if message.text not in options.train_direction_options.keys():
+        markup = keyboards.get_reply_keyboard(options.train_direction_options, ["/cancel"])
+        bot.reply_to(message, texts.training_direction_unknown, reply_markup=markup)
+        return
+    
+    bot.set_state(message.from_user.id, states.TrainState.choose_duration, message.chat.id)
+    markup = keyboards.get_reply_keyboard(options.train_duration_options, ["/cancel"])
+    bot.send_message(
+        message.chat.id,
+        texts.training_duration,
+        reply_markup=markup
+    )
+    
+    with bot.retrieve_data(message.from_user.id, message.chat.id) as data:
+        data["direction"] = options.train_direction_options[message.text]
+
+
+@logged_execution
+def process_choose_duration(message, bot):
+    if not message.text.isdigit() and message.text not in options.train_duration_options:
+        markup = keyboards.get_reply_keyboard(options.train_duration_options, ["/cancel"])
+        bot.reply_to(message, texts.training_duration_unknown, reply_markup=markup)
+        return
+    
+    bot.set_state(message.from_user.id, states.TrainState.choose_hints, message.chat.id)
+    markup = keyboards.get_reply_keyboard(options.train_hints_options, ["/cancel"])
+    bot.send_message(
+        message.chat.id,
+        texts.training_hints,
+        reply_markup=markup
+    )
+
+    with bot.retrieve_data(message.from_user.id, message.chat.id) as data:
+        data["duration"] = int(message.text) if message.text.isdigit() else config.TRAIN_MAX_N_WORDS
+
+
+@logged_execution
+def process_choose_hints(message, bot):
+    if message.text not in options.train_hints_options:
+        markup = keyboards.get_reply_keyboard(options.train_hints_options, ["/cancel"])
+        bot.reply_to(message, texts.training_hints_unknown, reply_markup=markup)
+        return
+    
+    bot.set_state(message.from_user.id, states.TrainState.train, message.chat.id)
+    with bot.retrieve_data(message.from_user.id, message.chat.id) as data:
+        language = data["language"]
+        strategy = data["strategy"]
+        direction = data["direction"]
+        duration = data["duration"]
+        hints = message.text
+        session_id = db_model.get_current_time()
+        group_id = data.get("group_id")
+        group_name = data.get("group_name")
+        init_message = data["init_message"]
+    
+    db_model.init_training_session(
+        pool, message.chat.id,
+        session_id, strategy, language, direction, duration, hints
+    )
+    if strategy != "group":
+        db_model.create_training_session(pool, message.chat.id, session_id, strategy, language, direction, duration)
+    else:
+        db_model.create_group_training_session(pool, message.chat.id, session_id, strategy, language, direction, duration, group_id)
+    
+    words = db_model.get_training_words(pool, message.chat.id, session_id)
+    
+    if len(words) == 0:
+        bot.send_message(
+            message.chat.id,
+            texts.training_no_words_found,
+            reply_markup=keyboards.empty
+        )
+        return
+    
+    train_message = bot.send_message(
+        message.chat.id,
+        texts.training_start.format(
+            strategy, len(words),
+            direction, hints,
+            texts.training_start_group.format(group_name) if strategy == "group" else ""
+        ),
+        reply_markup=keyboards.empty
+    )
+    if len(words) < duration and duration != config.TRAIN_MAX_N_WORDS:
+        bot.send_message(
+            message.chat.id,
+            texts.training_fewer_words,
+            reply_markup=keyboards.empty
+        )
+    
+    utils.clear_history(bot, message.chat.id, init_message, train_message.id)
+
+    # get_train_step(message=message, words=words, session_info=session_info, step=0, scores=[])

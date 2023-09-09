@@ -157,3 +157,12 @@ class DeleteGroupWordsState(StatesGroup):
 
 class ShowGroupsState(StatesGroup):
     init = State()
+
+
+class TrainState(StatesGroup):
+    choose_strategy = State()
+    choose_group = State()
+    choose_direction = State()
+    choose_duration = State()
+    choose_hints = State()
+    train = State()

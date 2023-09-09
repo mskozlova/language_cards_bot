@@ -32,13 +32,14 @@ def suggest_group_choices(message, bot, next_state):
     
     markup = keyboards.get_reply_keyboard(group_names, ["/exit"], row_width=3)
     
-    bot.send_message(
+    return bot.send_message(
         message.chat.id,
         texts.group_choose,
         reply_markup=markup
     )
 
 
+@logged_execution
 def get_number_of_batches(batch_size, total_number):
     n_batches = total_number // batch_size
     if total_number % batch_size > 0:
@@ -46,6 +47,7 @@ def get_number_of_batches(batch_size, total_number):
     return n_batches
 
 
+@logged_execution
 def save_words_edit_to_group(chat_id, language, group_id, words, action):
     if len(words) > 0:
         if action == "add":
@@ -54,3 +56,9 @@ def save_words_edit_to_group(chat_id, language, group_id, words, action):
             db_model.delete_words_from_group(pool, chat_id, language, group_id, words)
 
     return len(words)
+
+
+@logged_execution
+def clear_history(bot, chat_id, from_message_id, to_message_id):
+    for message_id in range(from_message_id, to_message_id):
+        bot.delete_message(chat_id, message_id)
