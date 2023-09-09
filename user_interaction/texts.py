@@ -195,13 +195,13 @@ training_hints = (
     "Training with hints will not affect you word scores. Choose 'no hints' to track your progress."
 )
 
-training_strategy_unknown = "This strategy is not supported. Try again /train"
+training_strategy_unknown = "This strategy is not supported. Choose a valid strategy:"
 
-training_direction_unknown = "This direction is not supported. Try again /train"
+training_direction_unknown = "This direction is not supported. Choose a valid direction:"
 
-training_duration_unknown = "This duration is not supported. Try again /train"
+training_duration_unknown = "This duration is not supported. Choose a valid duration:"
 
-training_hints_unknown = "These hints are not supported. Try again /train"
+training_hints_unknown = "These hints are not supported. Choose valid hints:"
 
 training_no_scores = "Scores are not saved because hints were used."
 

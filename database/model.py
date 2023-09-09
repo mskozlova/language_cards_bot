@@ -143,16 +143,16 @@ def get_current_language(pool, chat_id):
     return result[0]["current_lang"].decode()
 
 
-def init_training_session(pool, chat_id, session_info):
+def init_training_session(pool, chat_id, session_id, strategy, language, direction, duration, hints):
     execute_update_query(
         pool, queries.init_training_session,
         chat_id=chat_id,
-        session_id=session_info["session_id"],
-        strategy=session_info["strategy"].encode(),
-        language=session_info["language"].encode(),
-        direction=session_info["direction"].encode(),
-        duration=session_info["duration"],
-        hints=session_info["hints"].encode(),
+        session_id=session_id,
+        strategy=strategy.encode(),
+        language=language.encode(),
+        direction=direction.encode(),
+        duration=duration,
+        hints=hints.encode(),
     )
 
 
@@ -164,34 +164,35 @@ def get_session_info(pool, chat_id, session_id):
     )
 
 
-def create_training_session(pool, chat_id, session_info):
+def create_training_session(pool, chat_id, session_id, strategy, language, direction, duration):
     execute_update_query(
         pool, queries.create_training_session,
         chat_id=chat_id,
-        session_id=session_info["session_id"],
-        strategy=session_info["strategy"].encode(),
-        language=session_info["language"].encode(),
-        direction=session_info["direction"].encode(),
-        duration=session_info["duration"],
+        session_id=session_id,
+        strategy=strategy.encode(),
+        language=language.encode(),
+        direction=direction.encode(),
+        duration=duration,
     )
 
 
-def create_group_training_session(pool, chat_id, session_info):
+def create_group_training_session(pool, chat_id, session_id, strategy, language, direction, duration, group_id):
     execute_update_query(
         pool, queries.create_group_training_session,
         chat_id=chat_id,
-        session_id=session_info["session_id"],
-        strategy=session_info["strategy"].encode(),
-        language=session_info["language"].encode(),
-        direction=session_info["direction"].encode(),
-        duration=session_info["duration"]
+        session_id=session_id,
+        strategy=strategy.encode(),
+        language=language.encode(),
+        direction=direction.encode(),
+        duration=duration,
+        group_id=group_id.encode(),
     )
 
 
-def get_training_words(pool, chat_id, session_info):
+def get_training_words(pool, chat_id, session_id):
     return execute_select_query(
         pool, queries.get_training_words,
-        chat_id=chat_id, session_id=session_info["session_id"]
+        chat_id=chat_id, session_id=session_id
     )
 
 
@@ -205,13 +206,13 @@ def set_training_scores(pool, chat_id, session_id, word_idxs, scores):
     )
 
 
-def update_final_scores(pool, chat_id, session_info):
+def update_final_scores(pool, chat_id, session_id, language, direction):
     execute_update_query(
         pool, queries.update_final_scores,
         chat_id=chat_id,
-        session_id=session_info["session_id"],
-        language=session_info["language"].encode(),
-        direction=session_info["direction"].encode()
+        session_id=session_id,
+        language=language.encode(),
+        direction=direction.encode()
     )
 
 
