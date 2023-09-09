@@ -1,4 +1,6 @@
 import json
+import random
+import re
 
 
 def ifnull(x, replace):
@@ -63,6 +65,35 @@ def get_overall_score(db):
 
 def get_total_trains(db):
     return ifnull(db["n_trains_from"], 0) + ifnull(db["n_trains_to"], 0)
+
+
+def sample_hints(current_word, words, max_hints_number=3):
+    other_words = list(filter(lambda w: w["word"] != current_word["word"], words))
+    hints = random.sample(other_words, k=min(len(other_words), max_hints_number))
+    return hints
+
+
+def get_az_hint(word):
+    # TODO: mask only one of possible translations
+    if len(word) <= 4:
+        return "*" * len(word)
+    return word[0] + "*" * (len(word) - 2) + word[-1]
+
+
+def format_train_message(word, translation, hints_type):
+    if hints_type == "flashcards":
+        return "{}\n\n||{}||".format(
+            re.escape(word),
+            re.escape(translation) + " " * max(40 - len(translation), 0) + "ㅤ" # invisible symbol to extend spoiler
+        )
+    
+    if hints_type == "a****z":
+        return "{}\n{}".format(
+            re.escape(word),
+            re.escape(get_az_hint(translation))
+        )
+
+    return "{}".format(re.escape(word))
 
 
 def get_reaction_to_score(score):

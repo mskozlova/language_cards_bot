@@ -1,3 +1,5 @@
+import random
+
 from telebot import types
 
 from user_interaction import options, texts
@@ -39,4 +41,28 @@ def get_masked_choices(choices, mask, additional_commands=[], row_width=2):
     
     markup.add(*formatted_choices, row_width=row_width)
     markup.add(*additional_commands, row_width=len(additional_commands))
+    return markup
+
+
+def format_train_buttons(translation, hints, hints_type):
+    if hints_type == "flashcards":
+        markup = types.ReplyKeyboardMarkup(
+            row_width=1,
+            one_time_keyboard=True,
+            resize_keyboard=True
+        )
+        markup.add(*["/next", "/stop"])
+        return markup
+    
+    if hints_type != "test":
+        return empty
+    
+    all_words_list = hints + [translation, ]
+    random.shuffle(all_words_list)
+    markup = types.ReplyKeyboardMarkup(
+        row_width=2,
+        one_time_keyboard=True,
+        resize_keyboard=True
+    )
+    markup.add(*[telebot.types.KeyboardButton(w.split("/")[0]) for w in all_words_list])
     return markup

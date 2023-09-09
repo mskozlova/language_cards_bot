@@ -105,7 +105,7 @@ class StateYDBStorage(StateStorageBase):
         if full_state:
             full_state['data'] = data
             db_model.set_state(self.pool, chat_id, full_state)
-            return True
+            return False
 
 
 class ForgetMeState(StatesGroup):
