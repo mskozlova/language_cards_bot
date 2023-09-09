@@ -9,6 +9,8 @@ import word as word_utils
 
 from bot import constants, keyboards, states, utils
 
+import traceback
+
 
 # common
 @logged_execution
@@ -934,14 +936,16 @@ def process_choose_hints(message, bot):
         bot.reply_to(message, texts.training_hints_unknown, reply_markup=markup)
         return
     
-    bot.set_state(message.from_user.id, states.TrainState.train, message.chat.id)
     with bot.retrieve_data(message.from_user.id, message.chat.id) as data:
+        data["hints"] = message.text
+        data["session_id"] = db_model.get_current_time()
+        
         language = data["language"]
         strategy = data["strategy"]
         direction = data["direction"]
         duration = data["duration"]
-        hints = message.text
-        session_id = db_model.get_current_time()
+        hints = data["hints"]
+        session_id = data["session_id"]
         group_id = data.get("group_id")
         group_name = data.get("group_name")
         init_message = data["init_message"]
@@ -958,6 +962,7 @@ def process_choose_hints(message, bot):
     words = db_model.get_training_words(pool, message.chat.id, session_id)
     
     if len(words) == 0:
+        bot.delete_state(message.from_user.id, message.chat.id)
         bot.send_message(
             message.chat.id,
             texts.training_no_words_found,
@@ -983,4 +988,98 @@ def process_choose_hints(message, bot):
     
     utils.clear_history(bot, message.chat.id, init_message, train_message.id)
 
-    # get_train_step(message=message, words=words, session_info=session_info, step=0, scores=[])
+    bot.set_state(message.from_user.id, states.TrainState.train, message.chat.id)
+    with bot.retrieve_data(message.from_user.id, message.chat.id) as data:
+        data["words"] = words
+        data["step"] = 0
+        data["scores"] = []
+    
+    handle_train_step(message, bot)
+
+
+@logged_execution
+def handle_train_step_stop(message, bot):
+    bot.send_message(
+        message.chat.id,
+        texts.training_stopped,
+        reply_markup=keyboards.empty
+    )
+    bot.delete_state(message.from_user.id, message.chat.id)
+
+
+@logged_execution
+def handle_train_step(message, bot):
+    with bot.retrieve_data(message.from_user.id, message.chat.id) as data:
+        step = data["step"]
+        words = data["words"]
+        scores = data["scores"]
+        hints = data["hints"]
+        direction = data["direction"]
+        session_id = data["session_id"]
+        language = data["language"]
+    
+    logger.debug(f"step: {step}, words: {words}, scores: {scores}, hints: {hints}, direction: {direction}")
+    
+    if step != 0: # not a first iteration
+        word = words[step - 1]
+        is_correct = word_utils.compare_user_input_with_db(
+            message.text,
+            word,
+            hints,
+            direction
+        )
+        scores.append(int(is_correct))
+        if is_correct:
+            bot.send_message(
+                message.chat.id,
+                texts.train_correct_answer,
+                reply_markup=keyboards.empty
+            )
+        else:
+            bot.send_message(
+                message.chat.id,
+                texts.train_wrong_answer.format(
+                    word_utils.get_translation(word, direction)
+                ),
+                reply_markup=keyboards.empty
+            )
+
+    if step == len(words): # training complete
+        # TODO: different messages for different results
+        if hints == "no hints":
+            db_model.set_training_scores(
+                pool, message.chat.id, session_id,
+                list(range(1, len(words) + 1)), scores
+            )
+            db_model.update_final_scores(pool, message.chat.id, session_id, language, direction)
+        else:
+            bot.send_message(
+                message.chat.id, texts.training_no_scores
+            )
+        bot.send_message(
+            message.chat.id,
+            texts.training_results.format(sum(scores), len(words)),
+            reply_markup=keyboards.empty
+        )
+        bot.delete_state(message.from_user.id, message.chat.id)
+        return
+    
+    next_word = words[step]
+    hint_words = word_utils.sample_hints(next_word, words, 3)
+    bot.send_message(
+        message.chat.id,
+        word_utils.format_train_message(
+            word_utils.get_word(next_word, direction),
+            word_utils.get_translation(next_word, direction),
+            hints
+        ),
+        reply_markup=keyboards.format_train_buttons(
+            word_utils.get_translation(next_word, direction),
+            [word_utils.get_translation(hint, direction) for hint in hint_words],
+            hints
+        ),
+        parse_mode="MarkdownV2"
+    )
+    with bot.retrieve_data(message.from_user.id, message.chat.id) as data:
+        data["step"] += 1
+        data["scores"] = scores
