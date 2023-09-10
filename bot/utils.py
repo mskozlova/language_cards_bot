@@ -1,5 +1,4 @@
 import database.model as db_model
-from database.ydb_settings import pool
 from logs import logger, logged_execution
 from user_interaction import texts
 
@@ -12,7 +11,7 @@ def handle_language_not_set(message, bot):
 
 
 @logged_execution
-def suggest_group_choices(message, bot, next_state):
+def suggest_group_choices(message, bot, pool, next_state):
     language = db_model.get_current_language(pool, message.chat.id)
     if language is None:
         handle_language_not_set(message, bot)
@@ -48,7 +47,7 @@ def get_number_of_batches(batch_size, total_number):
 
 
 @logged_execution
-def save_words_edit_to_group(chat_id, language, group_id, words, action):
+def save_words_edit_to_group(pool, chat_id, language, group_id, words, action):
     if len(words) > 0:
         if action == "add":
             db_model.add_words_to_group(pool, chat_id, language, group_id, words)
