@@ -80,6 +80,7 @@ def test_delete_group_nonexistent(test_client, chat_id):
     
     with utils.CommandContext(test_client, chat_id, "gjgjgjgjg") as command:
         command.expect_next(texts.no_such_group)
+        command.expect_next(texts.group_choose)
     
     with utils.CommandContext(test_client, chat_id, "/exit") as command:
         command.expect_any()

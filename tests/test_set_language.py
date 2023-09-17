@@ -31,7 +31,7 @@ def test_set_language_cancel(test_client, chat_id):
         command.expect_next(texts.set_language)
      
     with utils.CommandContext(test_client, chat_id, "/cancel") as command:
-        command.expect_next(texts.set_language_cancel)
+        command.expect_next(texts.cancel_short)
 
 
 def test_set_second_language(test_client, chat_id):

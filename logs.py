@@ -66,11 +66,12 @@ def logged_execution(func):
             extra={"text": text, "arg": "{}".format(args), "kwarg": "{}".format(kwargs)}
         )
         try:
-            func(*args, **kwargs)
+            result = func(*args, **kwargs)
             logger.info(
                 "[LOG] Finished {} - chat_id {}".format(func.__name__, chat_id),
-                extra={"text": text, "arg": "{}".format(args), "kwarg": "{}".format(kwargs)}
+                extra={"text": text, "arg": "{}".format(args), "kwarg": "{}".format(kwargs), "result": str(result)}
             )
+            return result
         except Exception as e:
             logger.error(
                 "[LOG] Failed {} - chat_id {} - exception {}".format(func.__name__, chat_id, e),

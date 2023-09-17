@@ -128,7 +128,7 @@ cancel_short = "Cancelled!"
 
 unknown_message = "I don't know what to do :("
 
-stop_message = "Ok, stopped!"
+stop_message = "Stopped!"
 
 # show words
 words_count = "You have {} word(s) for language '{}'."

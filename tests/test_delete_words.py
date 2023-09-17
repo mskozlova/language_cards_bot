@@ -47,6 +47,7 @@ def test_delete_words(test_client, chat_id):
     
     with utils.CommandContext(test_client, chat_id, "/show_words") as command:
         command.expect_next_prefix("You have 8 word(s) for language")
+        command.expect_next_prefix(texts.choose_sorting)
 
     with utils.CommandContext(test_client, chat_id, "/exit") as command:
         command.expect_any()
