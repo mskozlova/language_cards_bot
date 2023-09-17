@@ -64,5 +64,5 @@ def format_train_buttons(translation, hints, hints_type):
         one_time_keyboard=True,
         resize_keyboard=True
     )
-    markup.add(*[telebot.types.KeyboardButton(w.split("/")[0]) for w in all_words_list])
+    markup.add(*[w.split("/")[0] for w in all_words_list])
     return markup
