@@ -12,24 +12,22 @@ from bot import constants, keyboards, states, utils
 # common
 @logged_execution
 def process_exit(message, bot, pool):
-    exit_message = bot.send_message(message.chat.id, texts.exited, reply_markup=keyboards.empty)
-    
     with bot.retrieve_data(message.from_user.id, message.chat.id) as data:
         if "init_message" in data:
-            utils.clear_history(bot, message.chat.id, data["init_message"], exit_message.id)
+            utils.clear_history(bot, message.chat.id, data["init_message"], message.id + 1)
             
     bot.delete_state(message.from_user.id, message.chat.id)
+    bot.send_message(message.chat.id, texts.exited, reply_markup=keyboards.empty)
 
 
 @logged_execution
 def process_cancel(message, bot, pool):
-    cancel_message = bot.send_message(message.chat.id, texts.cancel_short, reply_markup=keyboards.empty)
-    
     with bot.retrieve_data(message.from_user.id, message.chat.id) as data:
         if "init_message" in data:
-            utils.clear_history(bot, message.chat.id, data["init_message"], cancel_message.id)
+            utils.clear_history(bot, message.chat.id, data["init_message"], message.id + 1)
             
     bot.delete_state(message.from_user.id, message.chat.id)
+    bot.send_message(message.chat.id, texts.cancel_short, reply_markup=keyboards.empty)
 
 
 # TODO: add user to db after hitting /help or /start
@@ -136,8 +134,8 @@ def process_adding_words(message, bot, pool):
         [w.strip().lower() for w in message.text.split("\n")]
     ))
     if len(words) == 0:
-        bot.reply_to(message, texts.add_words_none_added)
         bot.delete_state(message.from_user.id, message.chat.id)
+        bot.reply_to(message, texts.add_words_none_added)
         return
     
     bot.reply_to(message, texts.add_words_instruction_2.format(words))
@@ -166,11 +164,11 @@ def process_word_translation(message, bot, pool):
         
         if len(data["translations"]) == len(data["words"]): # translation is over
             db_model.update_vocab(pool, message.chat.id, data["language"], data["words"], data["translations"])
+            bot.delete_state(message.from_user.id, message.chat.id)
             bot.send_message(
                 message.chat.id, texts.add_words_finished.format(len(data["words"])),
                 reply_markup=keyboards.empty
             )
-            bot.delete_state(message.from_user.id, message.chat.id)
         else:
             bot.send_message(
                 message.chat.id, data["words"][len(data["translations"])],
@@ -218,8 +216,8 @@ def handle_show_words(message, bot, pool):
 def process_choose_word_sort(message, bot, pool):
     with bot.retrieve_data(message.from_user.id, message.chat.id) as data:
         if message.text not in options.show_words_sort_options:
-            bot.reply_to(message, texts.sorting_not_supported.format(data["original_command"]))
             bot.delete_state(message.from_user.id, message.chat.id)
+            bot.reply_to(message, texts.sorting_not_supported.format(data["original_command"]))
             return
         
         words = data["vocabulary"]
@@ -258,12 +256,13 @@ def process_choose_word_sort(message, bot, pool):
 @logged_execution  
 def process_show_words_batch_unknown(message, bot, pool):
     with bot.retrieve_data(message.from_user.id, message.chat.id) as data:
-        bot.send_message(
-            message.chat.id,
-            texts.unknown_command.format(data["original_command"]),
-            reply_markup=keyboards.empty
-        )
+        original_command = data["original_command"]
     bot.delete_state(message.from_user.id, message.chat.id)
+    bot.send_message(
+        message.chat.id,
+        texts.unknown_command.format(original_command),
+        reply_markup=keyboards.empty
+    )
 
 
 @logged_execution  
@@ -475,8 +474,8 @@ def process_show_group_contents(message, bot, pool):
         entry["n_trains"] = word.get_total_trains()
     
     if len(group_contents) == 0:
-        bot.reply_to(message, texts.show_group_empty, reply_markup=keyboards.empty)
         bot.delete_state(message.from_user.id, message.chat.id)
+        bot.reply_to(message, texts.show_group_empty, reply_markup=keyboards.empty)
         return
     
     with bot.retrieve_data(message.from_user.id, message.chat.id) as data:
@@ -805,7 +804,6 @@ def process_group_deletion(message, bot, pool):
         return
     
     db_model.delete_group(pool, group_id)
-    bot.delete_state(message.from_user.id, message.chat.id)
     bot.send_message(message.chat.id, texts.delete_group_success.format(group_name))
 
 
@@ -990,12 +988,12 @@ def process_choose_hints(message, bot, pool):
 
 @logged_execution
 def handle_train_step_stop(message, bot, pool):
+    bot.delete_state(message.from_user.id, message.chat.id)
     bot.send_message(
         message.chat.id,
         texts.training_stopped,
         reply_markup=keyboards.empty
     )
-    bot.delete_state(message.from_user.id, message.chat.id)
 
 
 @logged_execution
@@ -1047,12 +1045,12 @@ def handle_train_step(message, bot, pool):
             bot.send_message(
                 message.chat.id, texts.training_no_scores
             )
+        bot.delete_state(message.from_user.id, message.chat.id)
         bot.send_message(
             message.chat.id,
             texts.training_results.format(sum(scores), len(words)),
             reply_markup=keyboards.empty
         )
-        bot.delete_state(message.from_user.id, message.chat.id)
         return
     
     next_word = words[step]
