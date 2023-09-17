@@ -39,12 +39,6 @@ def handle_help(message, bot, pool):
 
 
 @logged_execution
-def handle_stop(message, bot, pool):
-    bot.delete_state(message.from_user.id, message.chat.id)
-    bot.send_message(message.chat.id, texts.stop_message, reply_markup=keyboards.empty)
-
-
-@logged_execution
 def handle_forget_me(message, bot, pool):
     markup = keyboards.get_reply_keyboard(options.delete_are_you_sure)
     bot.set_state(message.from_user.id, states.ForgetMeState.init, message.chat.id)
@@ -91,8 +85,6 @@ def handle_set_language(message, bot, pool):
         bot.send_message(message.chat.id, texts.set_language, reply_markup=markup)
     
     bot.set_state(message.from_user.id, states.SetLanguageState.init, message.chat.id)
-    with bot.retrieve_data(message.from_user.id, message.chat.id) as data:
-        data["languages"] = languages
 
 
 @logged_execution
@@ -105,7 +97,7 @@ def process_setting_language(message, bot, pool):
         db_model.create_user(pool, message.chat.id)
     
     with bot.retrieve_data(message.from_user.id, message.chat.id) as data:
-        if language not in data["languages"]:
+        if language not in db_model.get_available_languages(pool, message.chat.id):
             bot.send_message(
                 message.chat.id,
                 texts.new_language_created.format(language),
@@ -127,7 +119,7 @@ def process_setting_language(message, bot, pool):
 def handle_add_words(message, bot, pool):
     language = db_model.get_current_language(pool, message.chat.id)
     if language is None:
-        utils.handle_language_not_set(message, bot, pool)
+        utils.handle_language_not_set(message, bot)
         return
     
     bot.set_state(message.from_user.id, states.AddWordsState.add_words, message.chat.id)
@@ -193,7 +185,7 @@ def process_word_translation(message, bot, pool):
 def handle_show_words(message, bot, pool):
     language = db_model.get_current_language(pool, message.chat.id)
     if language is None:
-        utils.handle_language_not_set(message, bot, pool)
+        utils.handle_language_not_set(message, bot)
         return
 
     vocab = db_model.get_full_vocab(pool, message.chat.id, language)
@@ -314,7 +306,7 @@ def handle_show_current_language(message, bot, pool):
     if current_language is not None:
         bot.send_message(message.chat.id, texts.current_language.format(current_language))
     else:
-        utils.handle_language_not_set(message, bot, pool)
+        utils.handle_language_not_set(message, bot)
 
 
 @logged_execution
@@ -346,7 +338,7 @@ def handle_show_languages(message, bot, pool):
 def handle_delete_language(message, bot, pool):
     language = db_model.get_current_language(pool, message.chat.id)
     if language is None:
-        utils.handle_language_not_set(message, bot, pool)
+        utils.handle_language_not_set(message, bot)
         return
     
     markup = keyboards.get_reply_keyboard(options.delete_are_you_sure)
@@ -389,7 +381,7 @@ def process_delete_language(message, bot, pool):
 def handle_delete_words(message, bot, pool):
     language = db_model.get_current_language(pool, message.chat.id)
     if language is None:
-        utils.handle_language_not_set(message, bot, pool)
+        utils.handle_language_not_set(message, bot)
         return
 
     bot.send_message(message.chat.id, texts.delete_words_start)
@@ -424,7 +416,7 @@ def process_deleting_words(message, bot, pool):
 def handle_create_group(message, bot, pool):
     language = db_model.get_current_language(pool, message.chat.id)
     if language is None:
-        utils.handle_language_not_set(message, bot, pool)
+        utils.handle_language_not_set(message, bot)
         return
 
     bot.send_message(message.chat.id, texts.create_group_name)
@@ -596,7 +588,8 @@ def process_save_group_edit(message, bot, pool):
             chosen_words.append(entity["word"])
         if action == "delete" and mask == 0:
             chosen_words.append(entity["word"])
-    n_edited_words = utils.save_words_edit_to_group(message.chat.id, language, group_id, chosen_words, action)
+    n_edited_words = utils.save_words_edit_to_group(pool, message.chat.id, language, group_id, chosen_words, action)
+    logger.debug(f"n_edited_words: {n_edited_words}")
     
     bot.reply_to(
         message,
@@ -641,6 +634,7 @@ def process_choose_words_batch_for_group(message, bot, pool):
     batch_mask = masks[batch_number * batch_size:(batch_number + 1) * batch_size]
     
     additional_commands = ["/cancel", "/exit"]
+    logger.debug(f"batch_number: {batch_number}, n_batches: {n_batches}")
     if batch_number + 1 < n_batches:
         additional_commands.append("/next")
     
@@ -821,7 +815,7 @@ def process_group_deletion(message, bot, pool):
 def handle_train(message, bot, pool):
     language = db_model.get_current_language(pool, message.chat.id)
     if language is None:
-        utils.handle_language_not_set(message, bot, pool)
+        utils.handle_language_not_set(message, bot)
         return
 
     markup = keyboards.get_reply_keyboard(options.train_strategy_options, ["/cancel"])

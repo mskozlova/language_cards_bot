@@ -159,7 +159,7 @@ def get_test_handlers():
 
 def get_stop_handler():
     return [
-        Handler(handlers.handle_stop, state="*", commands=["stop"]),
+        Handler(test_handlers.handle_stop, state="*", commands=["stop"]),
     ]
 
 
@@ -177,6 +177,7 @@ def create_bot(bot_token, pool):
     
     if os.getenv("IS_TESTING") is not None:
         handlers.extend(get_test_handlers())
+        handlers.extend(get_stop_handler())
     
     handlers.extend(get_start_handlers())
     handlers.extend(get_forget_me_handlers())
@@ -193,7 +194,6 @@ def create_bot(bot_token, pool):
     handlers.extend(get_group_delete_words_handlers())
     handlers.extend(get_train_handlers())
     
-    handlers.extend(get_stop_handler())
     handlers.extend(get_unknown_handler())
 
     for handler in handlers:

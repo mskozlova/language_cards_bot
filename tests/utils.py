@@ -34,6 +34,7 @@ class CommandContext:
 
             timer += sleep_s
             sleep(sleep_s)
+        raise AssertionError("no response when it's expected")
 
  
     def expect_next_prefix(self, correct_response_prefix, sleep_s=0.2, timeout_s=60):
@@ -52,6 +53,7 @@ class CommandContext:
 
             timer += sleep_s
             sleep(sleep_s)
+        raise AssertionError("no response when it's expected")
 
 
     def expect_none(self, sleep_s=0.5, timeout_s=2):
@@ -106,3 +108,4 @@ class CommandContext:
 
             timer += sleep_s
             sleep(sleep_s)
+        raise AssertionError("no response when it's expected")
