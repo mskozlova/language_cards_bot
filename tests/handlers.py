@@ -3,8 +3,7 @@ from time import sleep
 
 from user_interaction import texts
 
-
-sys.path.append('../')
+sys.path.append("../")
 
 import database.model as db_model
 from logs import logged_execution

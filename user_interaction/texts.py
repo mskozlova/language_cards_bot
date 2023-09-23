@@ -57,7 +57,9 @@ deleted_words_unknown = "\n\nOther words are unknown."
 # language setting
 current_language = "Your current language is {}."
 
-no_languages_yet = "You don't have any languages yet. Write name of a new language to create:"
+no_languages_yet = (
+    "You don't have any languages yet. Write name of a new language to create:"
+)
 
 set_language = "Choose one of your existent languages or type a name for a new one:"
 
@@ -108,7 +110,9 @@ create_group_name = (
     "Use /cancel to exit the process."
 )
 
-group_already_exists = "You already have a group with that name, please try another: /create_group"
+group_already_exists = (
+    "You already have a group with that name, please try another: /create_group"
+)
 
 group_created = "Group is created! Now add some words: /group_add_words"
 
@@ -160,7 +164,7 @@ delete_group_success = "👍 Group '{}' successfully deleted! /show_groups"
 # group_edit
 # group_edit_choose = "Select words, page {} of {}."
 
-group_edit_confirm = "✅ㅤ" # invisible symbol to avoid large emoji
+group_edit_confirm = "✅ㅤ"  # invisible symbol to avoid large emoji
 
 group_edit_choose = "Choose words to {}. Group '{}', page {} out of {}"
 
@@ -186,7 +190,9 @@ training_init = (
     "- group - words from a particular group"
 )
 
-training_direction = "Choose training direction: to ➡️, or from ⬅️ your current language"
+training_direction = (
+    "Choose training direction: to ➡️, or from ⬅️ your current language"
+)
 
 training_duration = "Choose duration of your training. You can also type in any number."
 
@@ -197,7 +203,9 @@ training_hints = (
 
 training_strategy_unknown = "This strategy is not supported. Choose a valid strategy:"
 
-training_direction_unknown = "This direction is not supported. Choose a valid direction:"
+training_direction_unknown = (
+    "This direction is not supported. Choose a valid direction:"
+)
 
 training_duration_unknown = "This duration is not supported. Choose a valid duration:"
 
@@ -211,16 +219,17 @@ training_cancelled = "Cancelled training, come back soon and /train again!"
 
 training_stopped = "Session stopped, results not saved.\nLet's /train again?"
 
-training_no_words_found = "There are no words satisfying your parameters, try choosing something else: /train"
+training_no_words_found = (
+    "There are no words satisfying your parameters, try choosing something else: /train"
+)
 
 training_fewer_words = "(I have found fewer words than you have requested)"
 
 training_start = (
-    "Starting training.\n" +
-    "Strategy: {}\nDuration: {}\nDirection: {}\nHints: {}{}"
+    "Starting training.\n" + "Strategy: {}\nDuration: {}\nDirection: {}\nHints: {}{}"
 )
 training_start_group = "\n\nGroup name: {}"
 
 # train reactions
-train_correct_answer = "✅ㅤ" # invisible symbol to avoid large emoji
+train_correct_answer = "✅ㅤ"  # invisible symbol to avoid large emoji
 train_wrong_answer = "❌ {}"

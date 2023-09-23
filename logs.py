@@ -10,7 +10,9 @@ class YcLoggingFormatter(jsonlogger.JsonFormatter):
     def add_fields(self, log_record, record, message_dict):
         super(YcLoggingFormatter, self).add_fields(log_record, record, message_dict)
         log_record["logger"] = record.name
-        log_record["level"] = str.replace(str.replace(record.levelname, "WARNING", "WARN"), "CRITICAL", "FATAL")
+        log_record["level"] = str.replace(
+            str.replace(record.levelname, "WARNING", "WARN"), "CRITICAL", "FATAL"
+        )
 
 
 logHandler = logging.StreamHandler()
@@ -40,7 +42,7 @@ def find_in_kwargs(kwargs, target_type):
 
 def get_message_info(*args, **kwargs):
     chat_id, text = "UNKNOWN", "UNKNOWN"
-    
+
     if find_in_args(args, Message) is not None:
         message = find_in_args(args, Message)
         chat_id, text = message.chat.id, message.text
@@ -53,7 +55,7 @@ def get_message_info(*args, **kwargs):
     elif find_in_kwargs(kwargs, CallbackQuery):
         call = find_in_kwargs(kwargs, CallbackQuery)
         chat_id, text = call.message.chat.id, call.message.text
-    
+
     return chat_id, text
 
 
@@ -63,50 +65,82 @@ def logged_execution(func):
 
         logger.info(
             "[LOG] Starting {} - chat_id {}".format(func.__name__, chat_id),
-            extra={"text": text, "arg": "{}".format(args), "kwarg": "{}".format(kwargs)}
+            extra={
+                "text": text,
+                "arg": "{}".format(args),
+                "kwarg": "{}".format(kwargs),
+            },
         )
         try:
             result = func(*args, **kwargs)
             logger.info(
                 "[LOG] Finished {} - chat_id {}".format(func.__name__, chat_id),
-                extra={"text": text, "arg": "{}".format(args), "kwarg": "{}".format(kwargs), "result": str(result)}
+                extra={
+                    "text": text,
+                    "arg": "{}".format(args),
+                    "kwarg": "{}".format(kwargs),
+                    "result": str(result),
+                },
             )
             return result
         except Exception as e:
             logger.error(
-                "[LOG] Failed {} - chat_id {} - exception {}".format(func.__name__, chat_id, e),
+                "[LOG] Failed {} - chat_id {} - exception {}".format(
+                    func.__name__, chat_id, e
+                ),
                 extra={
-                    "text": text, "arg": "{}".format(args), "kwarg": "{}".format(kwargs),
-                    "error": e, "traceback": traceback.format_exc(),
-                }
+                    "text": text,
+                    "arg": "{}".format(args),
+                    "kwarg": "{}".format(kwargs),
+                    "error": e,
+                    "traceback": traceback.format_exc(),
+                },
             )
+
     return wrapper
 
 
 class CallbackLogger:
-    def __init__(self, func): # TODO: add chat_id
+    def __init__(self, func):  # TODO: add chat_id
         logger.info("[LOG][CALLBACK] Registered {}".format(func.__name__))
         self.func = func
-        
+
     def __call__(self, *args, **kwargs):
         chat_id, text = get_message_info(*args, **kwargs)
-        
+
         logger.info(
-            "[LOG][CALLBACK] Starting {} - chat_id {}".format(self.func.__name__, chat_id),
-            extra={"text": text, "arg": "{}".format(args), "kwarg": "{}".format(kwargs)}
+            "[LOG][CALLBACK] Starting {} - chat_id {}".format(
+                self.func.__name__, chat_id
+            ),
+            extra={
+                "text": text,
+                "arg": "{}".format(args),
+                "kwarg": "{}".format(kwargs),
+            },
         )
 
         try:
             self.func(*args, **kwargs)
             logger.info(
-                "[LOG][CALLBACK] Finished {} - chat_id {}".format(self.func.__name__, chat_id),
-                extra={"text": text, "arg": "{}".format(args), "kwarg": "{}".format(kwargs)}
+                "[LOG][CALLBACK] Finished {} - chat_id {}".format(
+                    self.func.__name__, chat_id
+                ),
+                extra={
+                    "text": text,
+                    "arg": "{}".format(args),
+                    "kwarg": "{}".format(kwargs),
+                },
             )
         except Exception as e:
             logger.error(
-                "[LOG][CALLBACK] Failed {} - chat_id {} - exception {}".format(self.func.__name__, chat_id, e),
+                "[LOG][CALLBACK] Failed {} - chat_id {} - exception {}".format(
+                    self.func.__name__, chat_id, e
+                ),
                 extra={
-                    "text": text, "arg": "{}".format(args), "kwarg": "{}".format(kwargs),
-                    "error": e, "traceback": traceback.format_exc(),
-                }
+                    "text": text,
+                    "arg": "{}".format(args),
+                    "kwarg": "{}".format(kwargs),
+                    "error": e,
+                    "traceback": traceback.format_exc(),
+                },
             )
