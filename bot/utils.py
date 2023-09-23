@@ -1,8 +1,7 @@
 import database.model as db_model
-from logs import logger, logged_execution
-from user_interaction import texts
-
 from bot import constants, keyboards, states, utils
+from logs import logged_execution, logger
+from user_interaction import texts
 
 
 @logged_execution
@@ -16,26 +15,22 @@ def suggest_group_choices(message, bot, pool, next_state):
     if language is None:
         handle_language_not_set(message, bot)
         return
-    
+
     groups = db_model.get_all_groups(pool, message.chat.id, language)
     group_names = sorted([group["group_name"].decode() for group in groups])
-    
+
     if len(groups) == 0:
         bot.reply_to(message, texts.no_groups_yet)
         return
-    
+
     bot.set_state(message.from_user.id, next_state, message.chat.id)
     with bot.retrieve_data(message.from_user.id, message.chat.id) as data:
         data["language"] = language
         data["group_names"] = group_names
-    
+
     markup = keyboards.get_reply_keyboard(group_names, ["/exit"], row_width=3)
-    
-    return bot.send_message(
-        message.chat.id,
-        texts.group_choose,
-        reply_markup=markup
-    )
+
+    return bot.send_message(message.chat.id, texts.group_choose, reply_markup=markup)
 
 
 @logged_execution

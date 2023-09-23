@@ -44,23 +44,27 @@ def compare_user_input_with_db(user_input, db, hints_type=None, order="from"):
     if hints_type == "flashcards":
         return True
     if order == "from":
-        return any(t == user_input.lower().strip() for t in json.loads(db["translation"]))
+        return any(
+            t == user_input.lower().strip() for t in json.loads(db["translation"])
+        )
     elif order == "to":
-        return (user_input.lower().strip() == db["word"])
+        return user_input.lower().strip() == db["word"]
 
 
 def get_overall_score(db):
     if db["score_to"] is None and db["score_from"] is None:
         return None
-    
+
     if db["score_to"] is None:
         return db["score_from"] / db["n_trains_from"]
-    
+
     if db["score_from"] is None:
         return db["score_to"] / db["n_trains_to"]
-    
-    return 1 / 2 * db["score_from"] / db["n_trains_from"] + \
-        1 / 2 * db["score_to"] / db["n_trains_to"]
+
+    return (
+        1 / 2 * db["score_from"] / db["n_trains_from"]
+        + 1 / 2 * db["score_to"] / db["n_trains_to"]
+    )
 
 
 def get_total_trains(db):
@@ -84,14 +88,13 @@ def format_train_message(word, translation, hints_type):
     if hints_type == "flashcards":
         return "{}\n\n||{}||".format(
             re.escape(word),
-            re.escape(translation) + " " * max(40 - len(translation), 0) + "ㅤ" # invisible symbol to extend spoiler
+            re.escape(translation)
+            + " " * max(40 - len(translation), 0)
+            + "ㅤ",  # invisible symbol to extend spoiler
         )
-    
+
     if hints_type == "a****z":
-        return "{}\n{}".format(
-            re.escape(word),
-            re.escape(get_az_hint(translation))
-        )
+        return "{}\n{}".format(re.escape(word), re.escape(get_az_hint(translation)))
 
     return "{}".format(re.escape(word))
 
@@ -116,15 +119,15 @@ def format_word_for_listing(db):
             get_reaction_to_score(db["score"]),
             db["n_trains"],
             db["word"],
-            "/".join(json.loads(db["translation"]))
+            "/".join(json.loads(db["translation"])),
         )
-        
+
     return "{}` {:>3}% {:>4}  {} - {}`".format(
         get_reaction_to_score(db["score"]),
         int(db["score"] * 100),
         db["n_trains"],
         db["word"],
-        "/".join(json.loads(db["translation"]))
+        "/".join(json.loads(db["translation"])),
     )
 
 
@@ -145,29 +148,35 @@ def get_word_idx(vocabulary, word):
 class Word:
     def __init__(self, db_entry):
         self.db_entry = db_entry
-    
-    
+
     def get_score(self, score_type):
-        assert score_type in ("from", "to"), "score_type should be one of ('from', 'to')"
+        assert score_type in (
+            "from",
+            "to",
+        ), "score_type should be one of ('from', 'to')"
         if self.db_entry[f"score_{score_type}"] is None:
             return None
-        return self.db_entry[f"score_{score_type}"] / self.db_entry[f"n_trains_{score_type}"]
-    
-    
+        return (
+            self.db_entry[f"score_{score_type}"]
+            / self.db_entry[f"n_trains_{score_type}"]
+        )
+
     def get_overall_score(self):
         score_to = self.get_score("to")
         score_from = self.get_score("from")
-        
+
         if score_to is None and score_from is None:
             return None
-    
+
         if score_to is None:
             return score_from
-        
+
         if score_from is None:
             return score_to
-        
+
         return (score_to + score_from) / 2
-    
+
     def get_total_trains(self):
-        return ifnull(self.db_entry["n_trains_from"], 0) + ifnull(self.db_entry["n_trains_to"], 0)
+        return ifnull(self.db_entry["n_trains_from"], 0) + ifnull(
+            self.db_entry["n_trains_to"], 0
+        )
