@@ -487,11 +487,15 @@ def handle_create_group(message, bot, pool):
 def process_group_creation(message, bot, pool):
     with bot.retrieve_data(message.from_user.id, message.chat.id) as data:
         language = data["language"]
-    bot.delete_state(message.from_user.id, message.chat.id)
+    
 
-    # TODO: check latin letters and underscores
     # TODO: check name collisions with shared groups
     group_name = message.text.strip()
+    if not utils.check_group_name(group_name):
+        bot.send_message(message.chat.id, texts.group_name_invalid)
+        return
+        
+    bot.delete_state(message.from_user.id, message.chat.id)
     if len(db_model.get_group_by_name(pool, message.chat.id, language, group_name)) > 0:
         bot.reply_to(message, texts.group_already_exists)
         return

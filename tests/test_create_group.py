@@ -43,3 +43,17 @@ def test_create_group_cancel(test_client, chat_id):
 
     with utils.CommandContext(test_client, chat_id, "/cancel") as command:
         command.expect_next(texts.cancel_short)
+
+
+def test_create_group_invalid_name(test_client, chat_id):
+    with utils.CommandContext(test_client, chat_id, "/create_group") as command:
+        command.expect_next(texts.create_group_name)
+
+    with utils.CommandContext(test_client, chat_id, ".123abc   ") as command:
+        command.expect_next(texts.group_name_invalid)
+
+    with utils.CommandContext(test_client, chat_id, "abc_абв") as command:
+        command.expect_next(texts.group_name_invalid)
+
+    with utils.CommandContext(test_client, chat_id, "   abc_123_   ") as command:
+        command.expect_next(texts.group_created)
