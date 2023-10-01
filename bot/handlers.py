@@ -133,7 +133,6 @@ def process_setting_language(message, bot, pool):
 
 
 # TODO: not allow any special characters apart from "-"
-# TODO: is there still timeout ?
 @logged_execution
 def handle_add_words(message, bot, pool):
     language = db_model.get_current_language(pool, message.chat.id)
@@ -141,15 +140,97 @@ def handle_add_words(message, bot, pool):
         utils.handle_language_not_set(message, bot)
         return
 
-    bot.set_state(message.from_user.id, states.AddWordsState.add_words, message.chat.id)
+    bot.set_state(
+        message.from_user.id, states.AddWordsState.choose_mode, message.chat.id
+    )
     with bot.retrieve_data(message.from_user.id, message.chat.id) as data:
         data["language"] = language
 
-    bot.reply_to(message, texts.add_words_instruction_1)
+    markup = keyboards.get_reply_keyboard(options.add_words_modes, ["/cancel"])
+    bot.send_message(message.chat.id, texts.add_words_choose_mode, reply_markup=markup)
+    # bot.reply_to(message, texts.add_words_instruction_one_by_one_1)
 
 
 @logged_execution
-def process_adding_words(message, bot, pool):
+def process_add_words_mode(message, bot, pool):
+    if message.text not in options.add_words_modes:
+        markup = keyboards.get_reply_keyboard(options.add_words_modes, ["/cancel"])
+        bot.reply_to(message, texts.add_words_choose_mode, reply_markup=markup)
+        return
+
+    if message.text == "one-by-one":
+        bot.set_state(
+            message.from_user.id,
+            states.AddWordsState.add_words_one_by_one,
+            message.chat.id,
+        )
+        bot.send_message(message.chat.id, texts.add_words_instruction_one_by_one_1)
+    elif message.text == "together":
+        bot.set_state(
+            message.from_user.id,
+            states.AddWordsState.add_words_together,
+            message.chat.id,
+        )
+        bot.send_message(message.chat.id, texts.add_words_together_instruction)
+
+
+@logged_execution
+def process_adding_words_together(message, bot, pool):
+    with bot.retrieve_data(message.from_user.id, message.chat.id) as data:
+        language = data["language"]
+
+    words_with_translations = list(
+        filter(
+            lambda x: len(x) > 0, [w.strip().lower() for w in message.text.split("\n")]
+        )
+    )
+    if len(words_with_translations) == 0:
+        bot.delete_state(message.from_user.id, message.chat.id)
+        bot.reply_to(message, texts.add_words_none_added)
+        return
+
+    words = []
+    translations = []
+    for entry in words_with_translations:
+        if len(entry.split("=")) != 2:
+            bot.send_message(
+                message.chat.id, texts.add_words_together_wrong_format.format(entry)
+            )
+            return
+        if len(entry.split("=")[0].strip()) == 0:
+            bot.send_message(
+                message.chat.id, texts.add_words_together_empty_word.format(entry)
+            )
+            return
+        if len(entry.split("=")[1].strip()) == 0:
+            bot.send_message(
+                message.chat.id,
+                texts.add_words_together_empty_translation.format(entry),
+            )
+            return
+
+        words.append(entry.split("=")[0].strip().lower())
+        translations.append(
+            json.dumps([m.strip().lower() for m in entry.split("=")[1].split("/")])
+        )
+
+    db_model.update_vocab(
+        pool,
+        message.chat.id,
+        language,
+        words,
+        translations,
+    )
+    bot.delete_state(message.from_user.id, message.chat.id)
+    bot.send_message(
+        message.chat.id,
+        texts.add_words_finished.format(len(words)),
+        reply_markup=keyboards.empty,
+    )
+
+
+@logged_execution
+def process_adding_words_one_by_one(message, bot, pool):
     words = list(
         filter(
             lambda x: len(x) > 0, [w.strip().lower() for w in message.text.split("\n")]
@@ -160,14 +241,16 @@ def process_adding_words(message, bot, pool):
         bot.reply_to(message, texts.add_words_none_added)
         return
 
-    bot.reply_to(message, texts.add_words_instruction_2.format(words))
+    bot.reply_to(message, texts.add_words_instruction_one_by_one_2.format(len(words)))
     bot.send_message(
         message.chat.id,
         texts.add_words_translate.format(words[0]),
         reply_markup=keyboards.empty,
     )
 
-    bot.set_state(message.from_user.id, states.AddWordsState.translate, message.chat.id)
+    bot.set_state(
+        message.from_user.id, states.AddWordsState.translate_one_by_one, message.chat.id
+    )
     with bot.retrieve_data(message.from_user.id, message.chat.id) as data:
         data["words"] = words
         data["translations"] = []
@@ -182,7 +265,7 @@ def process_word_translation_stop(message, bot, pool):
 
 
 @logged_execution
-def process_word_translation(message, bot, pool):
+def process_word_translation_one_by_one(message, bot, pool):
     with bot.retrieve_data(message.from_user.id, message.chat.id) as data:
         data["translations"].append(
             json.dumps([m.strip().lower() for m in message.text.split("/")])
@@ -210,7 +293,7 @@ def process_word_translation(message, bot, pool):
             )
 
 
-# show words
+# SHOW WORDS
 
 
 # TODO: delete all unnecessary messages
@@ -487,14 +570,13 @@ def handle_create_group(message, bot, pool):
 def process_group_creation(message, bot, pool):
     with bot.retrieve_data(message.from_user.id, message.chat.id) as data:
         language = data["language"]
-    
 
     # TODO: check name collisions with shared groups
     group_name = message.text.strip()
     if not utils.check_group_name(group_name):
         bot.send_message(message.chat.id, texts.group_name_invalid)
         return
-        
+
     bot.delete_state(message.from_user.id, message.chat.id)
     if len(db_model.get_group_by_name(pool, message.chat.id, language, group_name)) > 0:
         bot.reply_to(message, texts.group_already_exists)

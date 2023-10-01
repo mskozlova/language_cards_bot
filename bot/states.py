@@ -113,8 +113,10 @@ class SetLanguageState(StatesGroup):
 
 
 class AddWordsState(StatesGroup):
-    add_words = State()
-    translate = State()
+    choose_mode = State()
+    add_words_one_by_one = State()
+    translate_one_by_one = State()
+    add_words_together = State()
 
 
 class ShowWordsState(StatesGroup):
