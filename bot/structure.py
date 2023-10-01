@@ -159,7 +159,7 @@ def get_show_groups_handlers():
         Handler(
             handlers.process_exit,
             commands=["exit"],
-            state=bot_states.DeleteGroupState.select_group,
+            state=bot_states.ShowGroupsState.init,
         ),
         Handler(
             handlers.process_show_group_contents, state=bot_states.ShowGroupsState.init
