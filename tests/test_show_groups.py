@@ -50,7 +50,10 @@ def test_prepare_add_words(test_client, chat_id):
     words = list(map(str, range(10)))
 
     with utils.CommandContext(test_client, chat_id, "/add_words") as command:
-        command.expect_next(texts.add_words_instruction_1)
+        command.expect_next(texts.add_words_choose_mode)
+
+    with utils.CommandContext(test_client, chat_id, "one-by-one") as command:
+        command.expect_next(texts.add_words_instruction_one_by_one_1)
 
     with utils.CommandContext(test_client, chat_id, "\n".join(words)) as command:
         command.expect_any_multiple(2)
@@ -139,7 +142,10 @@ def test_prepare_add_more_words(test_client, chat_id):
     words = list(map(str, range(10, 30)))
 
     with utils.CommandContext(test_client, chat_id, "/add_words") as command:
-        command.expect_next(texts.add_words_instruction_1)
+        command.expect_next(texts.add_words_choose_mode)
+
+    with utils.CommandContext(test_client, chat_id, "one-by-one") as command:
+        command.expect_next(texts.add_words_instruction_one_by_one_1)
 
     with utils.CommandContext(test_client, chat_id, "\n".join(words)) as command:
         command.expect_any_multiple(2)
@@ -217,7 +223,7 @@ def test_show_long_group(test_client, chat_id):
 def test_exit(test_client, chat_id):
     with utils.CommandContext(test_client, chat_id, "/show_groups") as command:
         command.expect_next(texts.group_choose)
-    
+
     with utils.CommandContext(test_client, chat_id, "/exit") as command:
         command.expect_next(texts.exited)
 

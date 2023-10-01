@@ -31,7 +31,10 @@ def test_prepare_add_words(test_client, chat_id):
     words = list(map(str, range(10)))
 
     with utils.CommandContext(test_client, chat_id, "/add_words") as command:
-        command.expect_next(texts.add_words_instruction_1)
+        command.expect_any()
+
+    with utils.CommandContext(test_client, chat_id, "one-by-one") as command:
+        command.expect_any()
 
     with utils.CommandContext(test_client, chat_id, "\n".join(words)) as command:
         command.expect_any_multiple(2)

@@ -20,6 +20,8 @@ show_words_sort_options = [
     "time added ⬆️",
 ]
 
+add_words_modes = ["one-by-one", "together"]
+
 group_add_words_sort_options = ["a-z", "time added ⬇️"]
 
 group_add_words_prefixes = {

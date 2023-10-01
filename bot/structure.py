@@ -45,16 +45,39 @@ def get_add_words_handlers():
     return [
         Handler(handlers.handle_add_words, commands=["add_words"]),
         Handler(
-            handlers.process_adding_words,
-            state=bot_states.AddWordsState.add_words,
+            handlers.process_cancel,
+            commands=["cancel"],
+            state=bot_states.AddWordsState.choose_mode,
+        ),
+        Handler(
+            handlers.process_add_words_mode, state=bot_states.AddWordsState.choose_mode
+        ),
+        Handler(
+            handlers.process_cancel,
+            commands=["cancel"],
+            state=bot_states.AddWordsState.add_words_one_by_one,
+        ),
+        Handler(
+            handlers.process_adding_words_one_by_one,
+            state=bot_states.AddWordsState.add_words_one_by_one,
         ),
         Handler(
             handlers.process_word_translation_stop,
             commands=["cancel"],
-            state=bot_states.AddWordsState.translate,
+            state=bot_states.AddWordsState.translate_one_by_one,
         ),
         Handler(
-            handlers.process_word_translation, state=bot_states.AddWordsState.translate
+            handlers.process_word_translation_one_by_one,
+            state=bot_states.AddWordsState.translate_one_by_one,
+        ),
+        Handler(
+            handlers.process_cancel,
+            commands=["cancel"],
+            state=bot_states.AddWordsState.add_words_together,
+        ),
+        Handler(
+            handlers.process_adding_words_together,
+            state=bot_states.AddWordsState.add_words_together,
         ),
     ]
 

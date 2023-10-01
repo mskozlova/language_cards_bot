@@ -77,16 +77,43 @@ show_languages_none = "You don't have any languages yet. Try /set_language to ad
 available_languages = "You have {} language(s):\n{}"
 
 # /add_words
-add_words_instruction_1 = (
+add_words_choose_mode = (
+    "Choose adding mode:\n"
+    "- one-by-one: provide a bunch of words and translate them one by one\n"
+    "- together: provide words with translations"
+)
+
+add_words_together_instruction = (
+    "Write words you want to add as follows:\n\n"
+    "first word = only translation\n"
+    "second word = translation1 / translation2\n\n"
+    "Multiple translations should be separated by '/'.\n"
+    "Type /cancel to exit the process."
+)
+
+add_words_together_wrong_format = (
+    "Entry\n'{}'\nhas wrong format.\n\n" "Try again or type /cancel."
+)
+
+add_words_together_empty_word = (
+    "Entry\n'{}'\nhas empty word.\n\n" "Try again or type /cancel."
+)
+
+add_words_together_empty_translation = (
+    "Entry\n'{}'\nhas empty translation.\n\n" "Try again or type /cancel."
+)
+
+add_words_instruction_one_by_one_1 = (
     "First, write new words you want to learn, each on new row.\n"
     "For example:\n"
     "hola\n"
     "gracias\n"
     "adiós\n\n"
-    "After that I will ask you to provide translations."
+    "After that I will ask you to provide translations.\n\n"
+    "Type /cancel to exit the process."
 )
 
-add_words_instruction_2 = (
+add_words_instruction_one_by_one_2 = (
     "You've added {} words, now let's translate them one by one. "
     "Type /cancel anytime to exit the translation.\n"
     "You can add multiple translations divided by '/', for example:\n"
@@ -110,9 +137,7 @@ create_group_name = (
     "Use /cancel to exit the process."
 )
 
-group_name_invalid = (
-    "Group name should consist only of latin letters, digits and underscores, try again or /cancel."
-)
+group_name_invalid = "Group name should consist only of latin letters, digits and underscores, try again or /cancel."
 
 group_already_exists = (
     "You already have a group with that name, please try another: /create_group"
