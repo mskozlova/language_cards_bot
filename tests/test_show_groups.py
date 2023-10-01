@@ -212,3 +212,14 @@ def test_show_long_group(test_client, chat_id):
 
     with utils.CommandContext(test_client, chat_id, "/next") as command:
         command.expect_next_number_of_rows(7 + 3)
+
+
+def test_exit(test_client, chat_id):
+    with utils.CommandContext(test_client, chat_id, "/show_groups") as command:
+        command.expect_next(texts.group_choose)
+    
+    with utils.CommandContext(test_client, chat_id, "/exit") as command:
+        command.expect_next(texts.exited)
+
+    with utils.CommandContext(test_client, chat_id, "abc") as command:
+        command.expect_none()
