@@ -110,6 +110,10 @@ create_group_name = (
     "Use /cancel to exit the process."
 )
 
+group_name_invalid = (
+    "Group name should consist only of latin letters, digits and underscores, try again or /cancel."
+)
+
 group_already_exists = (
     "You already have a group with that name, please try another: /create_group"
 )

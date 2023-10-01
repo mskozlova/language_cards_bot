@@ -1,3 +1,5 @@
+import re
+
 import database.model as db_model
 from bot import constants, keyboards, states, utils
 from logs import logged_execution, logger
@@ -39,6 +41,11 @@ def get_number_of_batches(batch_size, total_number):
     if total_number % batch_size > 0:
         n_batches += 1
     return n_batches
+
+
+@logged_execution
+def check_group_name(name):
+    return re.fullmatch("[a-zA-Z_\d]+", name) is not None
 
 
 @logged_execution
