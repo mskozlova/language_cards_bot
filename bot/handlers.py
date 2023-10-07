@@ -90,6 +90,7 @@ def handle_set_language(message, bot, pool):
 
     languages = db_model.get_available_languages(pool, message.chat.id)
 
+    # TODO: make languages emojis & add original language
     if len(languages) == 0:
         bot.send_message(
             message.chat.id, texts.no_languages_yet, reply_markup=keyboards.empty
