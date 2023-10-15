@@ -33,10 +33,28 @@ def get_set_language_handlers():
         Handler(
             handlers.process_cancel,
             commands=["cancel"],
-            state=bot_states.SetLanguageState.init,
+            state=[
+                bot_states.SetLanguageState.choose_language,
+                bot_states.CreateLanguageState.choose_language,
+                bot_states.CreateLanguageState.choose_translation_language,
+            ],
         ),
         Handler(
-            handlers.process_setting_language, state=bot_states.SetLanguageState.init
+            handlers.process_create_new_language,
+            commands=["new"],
+            state=bot_states.SetLanguageState.choose_language,
+        ),
+        Handler(
+            handlers.process_setting_language,
+            state=bot_states.SetLanguageState.choose_language,
+        ),
+        Handler(
+            handlers.process_set_translation_language,
+            state=bot_states.CreateLanguageState.choose_language,
+        ),
+        Handler(
+            handlers.process_save_new_language,
+            state=bot_states.CreateLanguageState.choose_translation_language,
         ),
     ]
 
