@@ -57,11 +57,11 @@ deleted_words_unknown = "\n\nOther words are unknown."
 # language setting
 current_language = "Your current language is {}."
 
-no_languages_yet = (
-    "You don't have any languages yet. Write name of a new language to create:"
-)
+no_languages_yet = "You don't have any languages yet."
 
-set_language = "Choose one of your existent languages or type a name for a new one:"
+set_language = "Choose one of your existent languages or create a new one:"
+
+choose_existing_language = "Choose one of you languages or use /new command"
 
 set_language_cancel = "Cancelled setting language!"
 
@@ -70,6 +70,22 @@ new_language_created = "You've created a new language {}."
 language_is_set = "Language set: {}.\nYou can /add_words to it or /train"
 
 no_language_is_set = "Language not set. Set in with command /set_language."
+
+create_new_language = (
+    "Choose a language you want to learn. Select a flag emoji, for example 🇫🇮.\n"
+    "Tip: type a colon ':' and a country code to find an emoji, for example ':fi'.\n\n"
+    "If there's no appropriate emoji, write a name as text. Use one word, only latin letters."
+)
+
+create_translation_language = (
+    "Choose a language you going to translate the words to, usually it's the language you know well.\n"
+    "Select a flag emoji, for example 🇬🇧. If there's no appropriate emoji, write a name as text. "
+    "Use one word, only latin letters."
+)
+
+bad_language_format = "Language should be an emoji or one word which consists of latin letters. Try again:"
+
+language_already_exists = "You already have language {}."
 
 # show languages
 show_languages_none = "You don't have any languages yet. Try /set_language to add one."

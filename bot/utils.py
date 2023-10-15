@@ -44,8 +44,16 @@ def get_number_of_batches(batch_size, total_number):
 
 
 @logged_execution
+def check_language_name(name):
+    return (
+        re.fullmatch(":[a-z]+", name) is not None # emoji
+        or re.fullmatch("[a-z]+", name) is not None # text
+    )
+
+
+@logged_execution
 def check_group_name(name):
-    return re.fullmatch("[a-zA-Z_\d]+", name) is not None
+    return re.fullmatch("", name) is not None
 
 
 @logged_execution

@@ -77,7 +77,6 @@ def handle_unknown(message, bot, pool):
 # set language
 
 
-# TODO: check language name (same as group name)
 @logged_execution
 def handle_set_language(message, bot, pool):
     language = db_model.get_current_language(pool, message.chat.id)
@@ -89,43 +88,128 @@ def handle_set_language(message, bot, pool):
         )
 
     languages = db_model.get_available_languages(pool, message.chat.id)
+    bot.set_state(
+        message.from_user.id, states.SetLanguageState.choose_language, message.chat.id
+    )
+    with bot.retrieve_data(message.from_user.id, message.chat.id) as data:
+        data["languages"] = languages
 
-    # TODO: make languages emojis & add original language
     if len(languages) == 0:
-        bot.send_message(
-            message.chat.id, texts.no_languages_yet, reply_markup=keyboards.empty
-        )
-    else:
-        markup = keyboards.get_reply_keyboard(languages, ["/cancel"])
-        bot.send_message(message.chat.id, texts.set_language, reply_markup=markup)
+        process_create_new_language(message, bot, pool)
+        return
 
-    bot.set_state(message.from_user.id, states.SetLanguageState.init, message.chat.id)
+    markup = keyboards.get_reply_keyboard(languages, ["/new", "/cancel"])
+    bot.send_message(message.chat.id, texts.set_language, reply_markup=markup)
 
 
 @logged_execution
-def process_setting_language(message, bot, pool):
-    language = message.text.lower().strip()
+def process_create_new_language(message, bot, pool):
+    # TODO: check language name (same as group name)
     user_info = db_model.get_user_info(pool, message.chat.id)
 
     if len(user_info) == 0:  # new user!
         bot.send_message(message.chat.id, texts.welcome, reply_markup=keyboards.empty)
         db_model.create_user(pool, message.chat.id)
 
+    bot.set_state(
+        message.from_user.id,
+        states.CreateLanguageState.choose_language,
+        message.chat.id,
+    )
+
+    markup = keyboards.get_reply_keyboard(["/cancel"])
+    bot.send_message(
+        message.chat.id,
+        texts.create_new_language,
+        reply_markup=markup,
+    )
+
+
+@logged_execution
+def process_set_translation_language(message, bot, pool):
+    if not utils.check_language_name(message.text.lower().strip()):
+        bot.send_message(
+            message.chat.id,
+            texts.bad_language_format,
+            reply_markup=keyboards.get_reply_keyboard(["/cancel"]),
+        )
+        return
+    
+    bot.set_state(
+        message.from_user.id,
+        states.CreateLanguageState.choose_translation_language,
+        message.chat.id,
+    )
+
     with bot.retrieve_data(message.from_user.id, message.chat.id) as data:
-        if language not in db_model.get_available_languages(pool, message.chat.id):
-            bot.send_message(
-                message.chat.id,
-                texts.new_language_created.format(language),
-                reply_markup=keyboards.empty,
-            )
-            db_model.user_add_language(pool, message.chat.id, language)
+        data["language"] = message.text.lower().strip()
+
+    markup = keyboards.get_reply_keyboard(["/cancel"])
+    bot.send_message(
+        message.chat.id,
+        texts.create_translation_language,
+        reply_markup=markup,
+    )
+
+
+@logged_execution
+def process_save_new_language(message, bot, pool):
+    if not utils.check_language_name(message.text.lower().strip()):
+        bot.send_message(
+            message.chat.id,
+            texts.bad_language_format,
+            reply_markup=keyboards.get_reply_keyboard(["/cancel"]),
+        )
+        return
+    
+    translation_language = message.text.lower().strip()
+    with bot.retrieve_data(message.from_user.id, message.chat.id) as data:
+        language = data["language"]
+        languages = data["languages"]
 
     bot.delete_state(message.from_user.id, message.chat.id)
 
-    db_model.update_current_lang(pool, message.chat.id, language)
+    full_language_name = f"{translation_language}->{language}"
+    if full_language_name in languages:
+        bot.send_message(
+            message.chat.id,
+            texts.language_already_exists.format(full_language_name),
+            reply_markup=keyboards.empty,
+        )
+        return
+
     bot.send_message(
         message.chat.id,
-        texts.language_is_set.format(language),
+        texts.new_language_created.format(full_language_name),
+        reply_markup=keyboards.empty,
+    )
+    db_model.user_add_language(pool, message.chat.id, full_language_name)
+    db_model.update_current_lang(pool, message.chat.id, full_language_name)
+    bot.send_message(
+        message.chat.id,
+        texts.language_is_set.format(full_language_name),
+        reply_markup=keyboards.empty,
+    )
+
+
+@logged_execution
+def process_setting_language(message, bot, pool):
+    with bot.retrieve_data(message.from_user.id, message.chat.id) as data:
+        if message.text not in data["languages"]:
+            markup = keyboards.get_reply_keyboard(
+                data["languages"], ["/new", "/cancel"]
+            )
+            bot.send_message(
+                message.chat.id, texts.choose_existing_language, reply_markup=markup
+            )
+            return
+
+    bot.delete_state(message.from_user.id, message.chat.id)
+
+    db_model.update_current_lang(pool, message.chat.id, message.text)
+    bot.send_message(
+        message.chat.id,
+        texts.language_is_set.format(message.text),
         reply_markup=keyboards.empty,
     )
 

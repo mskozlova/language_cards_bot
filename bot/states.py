@@ -108,8 +108,15 @@ class ForgetMeState(StatesGroup):
     init = State()
 
 
+class CreateLanguageState(StatesGroup):
+    choose_language = State()
+    choose_translation_language = State()
+
+
 class SetLanguageState(StatesGroup):
-    init = State()
+    choose_language = State()
+    new_language = State()
+    new_language_from = State()
 
 
 class AddWordsState(StatesGroup):
