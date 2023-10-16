@@ -134,7 +134,7 @@ def process_set_translation_language(message, bot, pool):
             reply_markup=keyboards.get_reply_keyboard(["/cancel"]),
         )
         return
-    
+
     bot.set_state(
         message.from_user.id,
         states.CreateLanguageState.choose_translation_language,
@@ -161,7 +161,7 @@ def process_save_new_language(message, bot, pool):
             reply_markup=keyboards.get_reply_keyboard(["/cancel"]),
         )
         return
-    
+
     translation_language = message.text.lower().strip()
     with bot.retrieve_data(message.from_user.id, message.chat.id) as data:
         language = data["language"]
