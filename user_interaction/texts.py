@@ -83,7 +83,7 @@ create_translation_language = (
     "Use one word, only latin letters."
 )
 
-bad_language_format = "Language should be an emoji or one word which consists of latin letters. Try again:"
+bad_language_format = "Language should be a flag emoji or one word which consists of latin letters. Try again:"
 
 language_already_exists = "You already have language {}."
 

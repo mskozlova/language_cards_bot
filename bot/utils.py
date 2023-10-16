@@ -1,8 +1,10 @@
 import re
 
+import emojis
+
 import database.model as db_model
-from bot import constants, keyboards, states, utils
-from logs import logged_execution, logger
+from bot import keyboards
+from logs import logged_execution
 from user_interaction import texts
 
 
@@ -45,10 +47,13 @@ def get_number_of_batches(batch_size, total_number):
 
 @logged_execution
 def check_language_name(name):
-    return (
-        re.fullmatch(":[a-z]+", name) is not None # emoji
-        or re.fullmatch("[a-z]+", name) is not None # text
-    )
+    return (  # emoji
+        len(emojis.get(name)) == 1
+        and emojis.db.get_emoji_by_alias(emojis.decode(name)[1:-1]) is not None
+        and emojis.db.get_emoji_by_alias(emojis.decode(name)[1:-1]).category == "Flags"
+    ) or re.fullmatch(  # text
+        "[a-z]+", name
+    ) is not None
 
 
 @logged_execution
