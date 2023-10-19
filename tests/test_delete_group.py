@@ -15,10 +15,13 @@ def test_prepare(test_client, chat_id):
         command.expect_next("Done!")
 
     with utils.CommandContext(test_client, chat_id, "/set_language") as command:
+        command.expect_any_multiple(2)
+
+    with utils.CommandContext(test_client, chat_id, "fi") as command:
         command.expect_any()
 
-    with utils.CommandContext(test_client, chat_id, "en") as command:
-        command.expect_any_multiple(3)
+    with utils.CommandContext(test_client, chat_id, "rus") as command:
+        command.expect_any_multiple(2)
 
 
 def test_create_groups(test_client, chat_id):
@@ -48,7 +51,7 @@ def test_delete_group_cancel(test_client, chat_id):
         command.expect_next(texts.group_choose)
 
     with utils.CommandContext(test_client, chat_id, "abc") as command:
-        command.expect_next(texts.delete_group_warning.format("abc", "en"))
+        command.expect_next(texts.delete_group_warning.format("abc", "rus->fi"))
 
     with utils.CommandContext(test_client, chat_id, "No..") as command:
         command.expect_next(texts.delete_group_cancel)
@@ -59,7 +62,7 @@ def test_delete_group(test_client, chat_id):
         command.expect_next(texts.group_choose)
 
     with utils.CommandContext(test_client, chat_id, "abc") as command:
-        command.expect_next(texts.delete_group_warning.format("abc", "en"))
+        command.expect_next(texts.delete_group_warning.format("abc", "rus->fi"))
 
     with utils.CommandContext(test_client, chat_id, "Yes!") as command:
         command.expect_next(texts.delete_group_success.format("abc"))

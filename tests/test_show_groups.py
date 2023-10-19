@@ -15,10 +15,13 @@ def test_prepare(test_client, chat_id):
         command.expect_next("Done!")
 
     with utils.CommandContext(test_client, chat_id, "/set_language") as command:
+        command.expect_any_multiple(2)
+
+    with utils.CommandContext(test_client, chat_id, "fi") as command:
         command.expect_any()
 
-    with utils.CommandContext(test_client, chat_id, "en") as command:
-        command.expect_any_multiple(3)
+    with utils.CommandContext(test_client, chat_id, "rus") as command:
+        command.expect_any_multiple(2)
 
 
 def test_show_empty_group(test_client, chat_id):
