@@ -104,7 +104,6 @@ def handle_set_language(message, bot, pool):
 
 @logged_execution
 def process_create_new_language(message, bot, pool):
-    # TODO: check language name (same as group name)
     user_info = db_model.get_user_info(pool, message.chat.id)
 
     if len(user_info) == 0:  # new user!

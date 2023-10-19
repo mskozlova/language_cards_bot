@@ -58,7 +58,7 @@ def check_language_name(name):
 
 @logged_execution
 def check_group_name(name):
-    return re.fullmatch("", name) is not None
+    return re.fullmatch("[0-9a-z_]+", name) is not None
 
 
 @logged_execution

@@ -24,28 +24,39 @@ def test_show_current_language_empty(test_client, chat_id):
 
 def test_set_first_language(test_client, chat_id):
     with utils.CommandContext(test_client, chat_id, "/set_language") as command:
-        command.expect_any()
+        command.expect_next(texts.welcome)
+        command.expect_next(texts.create_new_language)
 
-    with utils.CommandContext(test_client, chat_id, "en") as command:
-        command.expect_any_multiple(3)
+    with utils.CommandContext(test_client, chat_id, "fi") as command:
+        command.expect_next(texts.create_translation_language)
+
+    with utils.CommandContext(test_client, chat_id, "rus") as command:
+        command.expect_next(texts.new_language_created.format("rus->fi"))
+        command.expect_next(texts.language_is_set.format("rus->fi"))
 
     with utils.CommandContext(
         test_client, chat_id, "/show_current_language"
     ) as command:
-        command.expect_next(texts.current_language.format("en"))
+        command.expect_next(texts.current_language.format("rus->fi"))
 
 
 def test_set_second_language(test_client, chat_id):
     with utils.CommandContext(test_client, chat_id, "/set_language") as command:
         command.expect_any_multiple(2)
 
-    with utils.CommandContext(test_client, chat_id, "fi") as command:
+    with utils.CommandContext(test_client, chat_id, "/new") as command:
+        command.expect_any()
+    
+    with utils.CommandContext(test_client, chat_id, "abc") as command:
+        command.expect_any()
+
+    with utils.CommandContext(test_client, chat_id, "bca") as command:
         command.expect_any_multiple(2)
 
     with utils.CommandContext(
         test_client, chat_id, "/show_current_language"
     ) as command:
-        command.expect_next(texts.current_language.format("fi"))
+        command.expect_next(texts.current_language.format("bca->abc"))
 
 
 def test_delete_language(test_client, chat_id):
