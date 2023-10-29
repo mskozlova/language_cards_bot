@@ -9,6 +9,13 @@ train_duration_options = ["10", "20", "All"]
 
 train_hints_options = ["flashcards", "test", "a****z", "no hints"]
 
+train_reactions = {
+    0.9: "🎉",
+    0.7: "👏",
+    0.4: "😐",
+    0.:  "😡",
+}
+
 show_words_sort_options = [
     "a-z",
     "z-a",

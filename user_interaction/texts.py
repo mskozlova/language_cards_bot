@@ -236,7 +236,7 @@ training_init = (
 )
 
 training_direction = (
-    "Choose training direction: to ➡️, or from ⬅️ your current language"
+    "Choose training direction: {} ➡️ {}, or {} ⬅️ {}."
 )
 
 training_duration = "Choose duration of your training. You can also type in any number."
@@ -258,7 +258,7 @@ training_hints_unknown = "These hints are not supported. Choose valid hints:"
 
 training_no_scores = "Scores are not saved because hints were used."
 
-training_results = "Score: {} / {}\n🎉 Training complete!\nLet's /train again?"
+training_results = "Score: {} / {}\n{} Training complete!\nLet's /train again?"
 
 training_cancelled = "Cancelled training, come back soon and /train again!"
 
