@@ -52,7 +52,7 @@ def test_set_second_language(test_client, chat_id):
 
     with utils.CommandContext(test_client, chat_id, "/new") as command:
         command.expect_next(texts.create_new_language)
-        
+
     with utils.CommandContext(test_client, chat_id, "🇮🇩") as command:
         command.expect_next(texts.create_translation_language)
 
@@ -74,13 +74,13 @@ def test_language_already_exists(test_client, chat_id):
     with utils.CommandContext(test_client, chat_id, "/set_language") as command:
         command.expect_next(texts.current_language.format("rus->fi"))
         command.expect_next(texts.set_language)
-    
+
     with utils.CommandContext(test_client, chat_id, "/new") as command:
         command.expect_next(texts.create_new_language)
-        
+
     with utils.CommandContext(test_client, chat_id, "🇮🇩") as command:
         command.expect_next(texts.create_translation_language)
-    
+
     with utils.CommandContext(test_client, chat_id, "🇷🇺") as command:
         command.expect_next(texts.language_already_exists.format("🇷🇺->🇮🇩"))
 
@@ -89,7 +89,7 @@ def test_set_wrong_language_format(test_client, chat_id):
     with utils.CommandContext(test_client, chat_id, "/set_language") as command:
         command.expect_next(texts.current_language.format("rus->fi"))
         command.expect_next(texts.set_language)
-    
+
     with utils.CommandContext(test_client, chat_id, "/new") as command:
         command.expect_next(texts.create_new_language)
 
@@ -107,6 +107,6 @@ def test_set_wrong_language_format(test_client, chat_id):
 
     with utils.CommandContext(test_client, chat_id, "🏴󠁧󠁢󠁳󠁣󠁴󠁿") as command:
         command.expect_next(texts.create_translation_language)
-    
+
     with utils.CommandContext(test_client, chat_id, "/cancel") as command:
         command.expect_next(texts.cancel_short)

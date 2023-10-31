@@ -1121,7 +1121,7 @@ def handle_train(message, bot, pool):
 def init_direction_choice(message, bot, pool):
     with bot.retrieve_data(message.from_user.id, message.chat.id) as data:
         language = data["language"]
-    
+
     markup = keyboards.get_reply_keyboard(options.train_direction_options, ["/cancel"])
     bot.send_message(
         message.chat.id,
@@ -1131,7 +1131,7 @@ def init_direction_choice(message, bot, pool):
             language.split("->")[1],
             language.split("->")[0],
         ),
-        reply_markup=markup
+        reply_markup=markup,
     )
     bot.set_state(
         message.from_user.id, states.TrainState.choose_direction, message.chat.id
@@ -1186,11 +1186,7 @@ def process_choose_direction(message, bot, pool):
         markup = keyboards.get_reply_keyboard(
             options.train_direction_options, ["/cancel"]
         )
-        bot.reply_to(
-            message,
-            texts.training_direction_unknown,
-            reply_markup=markup
-        )
+        bot.reply_to(message, texts.training_direction_unknown, reply_markup=markup)
         return
 
     bot.set_state(
@@ -1369,12 +1365,14 @@ def handle_train_step(message, bot, pool):
         else:
             bot.send_message(message.chat.id, texts.training_no_scores)
         bot.delete_state(message.from_user.id, message.chat.id)
-        
+
         reaction = None
-        for score, current_reaction in sorted(options.train_reactions.items(), key=lambda x: x[0]):
+        for score, current_reaction in sorted(
+            options.train_reactions.items(), key=lambda x: x[0]
+        ):
             if sum(scores) / len(words) >= score:
                 reaction = current_reaction
-        
+
         bot.send_message(
             message.chat.id,
             texts.training_results.format(sum(scores), len(words), reaction),

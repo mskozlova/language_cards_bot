@@ -235,9 +235,7 @@ training_init = (
     "- group - words from a particular group"
 )
 
-training_direction = (
-    "Choose training direction: {} ➡️ {}, or {} ⬅️ {}."
-)
+training_direction = "Choose training direction: {} ➡️ {}, or {} ⬅️ {}."
 
 training_duration = "Choose duration of your training. You can also type in any number."
 

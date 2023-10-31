@@ -80,13 +80,13 @@ def sample_hints(current_word, words, max_hints_number=3):
 def get_az_hint(word):
     word_versions = word.split("/")
     masks = []
-    
+
     for version in word_versions:
         if len(version) <= 4:
             masks.append("*" * len(version))
         else:
             masks.append(version[0] + "*" * (len(version) - 2) + version[-1])
-    
+
     return "/".join(masks)
 
 
@@ -100,10 +100,7 @@ def format_train_message(word, translation, hints_type):
         )
 
     if hints_type == "a****z":
-        return "{}\n{}".format(
-            re.escape(word),
-            re.escape(get_az_hint(translation))
-        )
+        return "{}\n{}".format(re.escape(word), re.escape(get_az_hint(translation)))
 
     return "{}".format(re.escape(word))
 
