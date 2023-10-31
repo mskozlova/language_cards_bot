@@ -13,7 +13,7 @@ train_reactions = {
     0.9: "🎉",
     0.7: "👏",
     0.4: "😐",
-    0.:  "😡",
+    0.0: "😡",
 }
 
 show_words_sort_options = [

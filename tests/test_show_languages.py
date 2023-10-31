@@ -40,15 +40,17 @@ def test_set_second_language(test_client, chat_id):
 
     with utils.CommandContext(test_client, chat_id, "/new") as command:
         command.expect_any_multiple(1)
-    
+
     with utils.CommandContext(test_client, chat_id, "chinese") as command:
         command.expect_any()
 
     with utils.CommandContext(test_client, chat_id, "en") as command:
         command.expect_any_multiple(2)
-    
+
     with utils.CommandContext(test_client, chat_id, "/show_languages") as command:
-        command.expect_next(texts.available_languages.format(2, "💚 en->chinese\n🖤 rus->fi"))
+        command.expect_next(
+            texts.available_languages.format(2, "💚 en->chinese\n🖤 rus->fi")
+        )
 
 
 def test_set_third_language(test_client, chat_id):
@@ -65,7 +67,9 @@ def test_set_third_language(test_client, chat_id):
         command.expect_any_multiple(2)
 
     with utils.CommandContext(test_client, chat_id, "/show_languages") as command:
-        command.expect_next(texts.available_languages.format(3, "💚 cba->abc\n🖤 en->chinese\n🖤 rus->fi"))
+        command.expect_next(
+            texts.available_languages.format(3, "💚 cba->abc\n🖤 en->chinese\n🖤 rus->fi")
+        )
 
 
 def test_delete_language(test_client, chat_id):
@@ -76,4 +80,6 @@ def test_delete_language(test_client, chat_id):
         command.expect_any()
 
     with utils.CommandContext(test_client, chat_id, "/show_languages") as command:
-        command.expect_next(texts.available_languages.format(2, "🖤 en->chinese\n🖤 rus->fi"))
+        command.expect_next(
+            texts.available_languages.format(2, "🖤 en->chinese\n🖤 rus->fi")
+        )

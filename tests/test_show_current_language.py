@@ -46,7 +46,7 @@ def test_set_second_language(test_client, chat_id):
 
     with utils.CommandContext(test_client, chat_id, "/new") as command:
         command.expect_any()
-    
+
     with utils.CommandContext(test_client, chat_id, "abc") as command:
         command.expect_any()
 
