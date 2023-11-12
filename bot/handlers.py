@@ -36,11 +36,13 @@ def process_cancel(message, bot, pool):
 # TODO: add user to db after hitting /help or /start
 @logged_execution
 def handle_help(message, bot, pool):
+    db_model.log_command(pool, message.chat.id, message.text)
     bot.send_message(message.chat.id, texts.help_message, reply_markup=keyboards.empty)
 
 
 @logged_execution
 def handle_forget_me(message, bot, pool):
+    db_model.log_command(pool, message.chat.id, message.text)
     markup = keyboards.get_reply_keyboard(options.delete_are_you_sure)
     bot.set_state(message.from_user.id, states.ForgetMeState.init, message.chat.id)
     bot.send_message(message.chat.id, texts.forget_me_warning, reply_markup=markup)
@@ -79,6 +81,7 @@ def handle_unknown(message, bot, pool):
 
 @logged_execution
 def handle_set_language(message, bot, pool):
+    db_model.log_command(pool, message.chat.id, message.text)
     language = db_model.get_current_language(pool, message.chat.id)
     if language is not None:
         bot.send_message(
@@ -219,6 +222,7 @@ def process_setting_language(message, bot, pool):
 # TODO: not allow any special characters apart from "-"
 @logged_execution
 def handle_add_words(message, bot, pool):
+    db_model.log_command(pool, message.chat.id, message.text)
     language = db_model.get_current_language(pool, message.chat.id)
     if language is None:
         utils.handle_language_not_set(message, bot)
@@ -383,6 +387,7 @@ def process_word_translation_one_by_one(message, bot, pool):
 # TODO: delete all unnecessary messages
 @logged_execution
 def handle_show_words(message, bot, pool):
+    db_model.log_command(pool, message.chat.id, message.text)
     language = db_model.get_current_language(pool, message.chat.id)
     if language is None:
         utils.handle_language_not_set(message, bot)
@@ -518,6 +523,7 @@ def process_show_words_batch_next(message, bot, pool):
 
 @logged_execution
 def handle_show_current_language(message, bot, pool):
+    db_model.log_command(pool, message.chat.id, message.text)
     current_language = db_model.get_current_language(pool, message.chat.id)
     if current_language is not None:
         bot.send_message(
@@ -529,6 +535,7 @@ def handle_show_current_language(message, bot, pool):
 
 @logged_execution
 def handle_show_languages(message, bot, pool):
+    db_model.log_command(pool, message.chat.id, message.text)
     languages = sorted(db_model.get_available_languages(pool, message.chat.id))
     current_language = db_model.get_current_language(pool, message.chat.id)
 
@@ -553,6 +560,7 @@ def handle_show_languages(message, bot, pool):
 
 @logged_execution
 def handle_delete_language(message, bot, pool):
+    db_model.log_command(pool, message.chat.id, message.text)
     language = db_model.get_current_language(pool, message.chat.id)
     if language is None:
         utils.handle_language_not_set(message, bot)
@@ -601,6 +609,7 @@ def process_delete_language(message, bot, pool):
 # TODO: delete words from groups too
 @logged_execution
 def handle_delete_words(message, bot, pool):
+    db_model.log_command(pool, message.chat.id, message.text)
     language = db_model.get_current_language(pool, message.chat.id)
     if language is None:
         utils.handle_language_not_set(message, bot)
@@ -639,6 +648,7 @@ def process_deleting_words(message, bot, pool):
 
 @logged_execution
 def handle_create_group(message, bot, pool):
+    db_model.log_command(pool, message.chat.id, message.text)
     language = db_model.get_current_language(pool, message.chat.id)
     if language is None:
         utils.handle_language_not_set(message, bot)
@@ -686,6 +696,7 @@ def process_group_creation(message, bot, pool):
 
 @logged_execution
 def handle_show_groups(message, bot, pool):
+    db_model.log_command(pool, message.chat.id, message.text)
     utils.suggest_group_choices(message, bot, pool, states.ShowGroupsState.init)
 
 
@@ -731,6 +742,7 @@ def process_show_group_contents(message, bot, pool):
 # TODO: delete all unnecessary messages
 @logged_execution
 def handle_group_add_words(message, bot, pool):
+    db_model.log_command(pool, message.chat.id, message.text)
     utils.suggest_group_choices(
         message, bot, pool, states.AddGroupWordsState.choose_group
     )
@@ -939,6 +951,7 @@ def process_choose_words_batch_for_group(message, bot, pool):
 # group delete words
 @logged_execution
 def handle_group_delete_words(message, bot, pool):
+    db_model.log_command(pool, message.chat.id, message.text)
     utils.suggest_group_choices(
         message, bot, pool, states.DeleteGroupWordsState.choose_group
     )
@@ -1025,6 +1038,7 @@ def process_choose_sorting_to_delete_words(message, bot, pool):
 
 @logged_execution
 def handle_delete_group(message, bot, pool):
+    db_model.log_command(pool, message.chat.id, message.text)
     utils.suggest_group_choices(
         message, bot, pool, states.DeleteGroupState.select_group
     )
@@ -1099,6 +1113,7 @@ def process_group_deletion(message, bot, pool):
 
 @logged_execution
 def handle_train(message, bot, pool):
+    db_model.log_command(pool, message.chat.id, message.text)
     language = db_model.get_current_language(pool, message.chat.id)
     if language is None:
         utils.handle_language_not_set(message, bot)

@@ -559,3 +559,15 @@ bulk_update_group_delete = f"""
         AND group_id == $group_id
         AND word IN $words;
 """
+
+log_command = f"""
+    DECLARE $chat_id AS Int64;
+    DECLARE $timestamp AS Uint64;
+    DECLARE $command AS Utf8;
+    
+    UPSERT INTO `command_log`
+    SELECT
+        $chat_id AS chat_id,
+        $timestamp AS timestamp,
+        $command AS command;
+"""

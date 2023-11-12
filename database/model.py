@@ -274,6 +274,17 @@ def delete_words_from_group(pool, chat_id, language, group_id, words):
         )
 
 
+def log_command(pool, chat_id, command):
+    timestamp = get_current_time()
+    execute_update_query(
+        pool,
+        queries.log_command,
+        chat_id=chat_id,
+        timestamp=timestamp,
+        command=command,
+    )
+
+
 def truncate_tables(pool):
     for query in queries.truncate_tables_queries:
         execute_update_query(pool, query)
