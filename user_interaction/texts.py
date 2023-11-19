@@ -59,7 +59,7 @@ howto_training_text = (
 )
 
 howto_groups = (
-    "*How to create a manage groups?*\n\n"
+    "*How to create and manage groups?*\n\n"
     "When you have a language set up and words added, you can unite words in groups and memorise them "
     "together \(use /train command with `group` strategy\)\. Each word can belong to 1 or more groups, or none at all\.\n"
     "Groups can be anything you want: from parts of speech to a specific topic\: politics, nature, travelling\.\n\n"
