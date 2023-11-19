@@ -20,6 +20,14 @@ def get_start_handlers():
     ]
 
 
+def get_howto_handlers():
+    return [
+        Handler(handlers.handle_howto_basic, commands=["howto"]),
+        Handler(handlers.handle_howto_training, commands=["howto_training"]),
+        Handler(handlers.handle_howto_groups, commands=["howto_groups"]),
+    ]
+
+
 def get_forget_me_handlers():
     return [
         Handler(handlers.handle_forget_me, commands=["forget_me"]),
@@ -377,6 +385,7 @@ def create_bot(bot_token, pool):
         handlers.extend(get_stop_handler())
 
     handlers.extend(get_start_handlers())
+    handlers.extend(get_howto_handlers())
     handlers.extend(get_forget_me_handlers())
     handlers.extend(get_set_language_handlers())
     handlers.extend(get_add_words_handlers())

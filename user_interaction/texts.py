@@ -1,7 +1,12 @@
 # welcome messages
 help_message = (
     "Ahoy, sexy! I am a cute little bot for remembering "
-    "words you've learned during your language course. Here's how you can use me:\n\n"
+    "words you've learned during your language course.\n\n"
+    "If you are new here, check out these guides:\n"
+    "- /howto - how to get started\n"
+    "- /howto_training - all about training strategies and scoring\n"
+    "- /howto_groups - creating and managing word groups\n\n"
+    "Here's the full list of commands:\n\n"
     "- /help or /start to read this message again.\n"
     "- /set_language to set current vocabulary "
     "(you can add multiple and switch between them without erasing the progress).\n"
@@ -20,6 +25,51 @@ help_message = (
 )
 
 welcome = "Hey! I can see you are new here. Welcome!"
+
+# how to
+how_to_text = (
+    "*How to start learning?*\n\n"
+    "1\. First \- set up a language you are learning: /set\_language\.\n"
+    "2\. Then add words to it: /add\_words\. You can see all the words you currently have using /show\_words\.\n"
+    "3\. You're all set up\! Use /train to start memorising your words\. Learn more about training: /howto\_training\.\n\n"
+    "You can set up multiple languages\!\n"
+    "If you later want to delete your current language use /delete\_language\.\n"
+    "Delete words from the current language using /delete\_words\."
+)
+
+howto_training_text = (
+    "*How to train?*\n\n"
+    "Use /train command to start memorising the words\.\n\n"
+    "Training is set up with 4 choices: strategy, direction, duration and hints\.\n\n"
+    "How to choose a strategy:\n"
+    "\- `random` \- memorise a random sample of all your words\.\n"
+    "\- `new` \- random words that were memorised less than 3 times before\.\n"
+    "\- `bad` \- random words that have low score \(< 0\.7\)\.\n"
+    "\- `group` \- words from a certain group\. Learn how to create groups: /howto\_groups\.\n\n"
+    "Direction:\n"
+    "Memorise how to translate words from the language you're studying or to it\.\n\n"
+    "Duration:\n"
+    "How many words to memorise during one training\. Choose one of the suggeted lengths or any number or All\.\n\n"
+    "Hints:\n"
+    "\- `flashcards` \- shows a translation under a spoiler, check yourself when you're ready\. Doesn't change word scores\!\n"
+    "\- `test` \- shows 4 options for translation, select the correct one\. Doesn't change word scores\!\n"
+    "\- `a****z` \- shows the first and the last letters of the translation, type in the full transaltion\. Doesn't change word scores\!\n"
+    "\- `no hints` \- type in the full translation without any hints\. *Affects the scores*\!\n\n"
+    "Track you training progress with /show\_words\."
+)
+
+howto_groups = (
+    "*How to create a manage groups?*\n\n"
+    "When you have a language set up and words added, you can unite words in groups and memorise them "
+    "together \(use /train command with `group` strategy\)\. Each word can belong to 1 or more groups, or none at all\.\n"
+    "Groups can be anything you want: from parts of speech to a specific topic\: politics, nature, travelling\.\n\n"
+    "Use /create\_group to start\.\n"
+    "Then /group\_add\_words to select which words you want to add\.\n"
+    "Use /group\_delete\_words if you need to delete words from a group \(but not from your vocabulary\!\)\. "
+    "Deleting words from the vocabulary also deletes them from all groups\.\n"
+    "Use /show\_groups to see all your groups and their contents\.\n"
+    "Use /delete\_group to delete a group\. This again does not delete the words from your vocabulary\."
+)
 
 # /forget_me
 forget_me_warning = (

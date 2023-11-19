@@ -33,11 +33,43 @@ def process_cancel(message, bot, pool):
     bot.send_message(message.chat.id, texts.cancel_short, reply_markup=keyboards.empty)
 
 
-# TODO: add user to db after hitting /help or /start
 @logged_execution
 def handle_help(message, bot, pool):
     db_model.log_command(pool, message.chat.id, message.text)
     bot.send_message(message.chat.id, texts.help_message, reply_markup=keyboards.empty)
+
+
+@logged_execution
+def handle_howto_basic(message, bot, pool):
+    db_model.log_command(pool, message.chat.id, message.text)
+    bot.send_message(
+        message.chat.id,
+        texts.how_to_text,
+        reply_markup=keyboards.empty,
+        parse_mode="MarkdownV2",
+    )
+
+
+@logged_execution
+def handle_howto_training(message, bot, pool):
+    db_model.log_command(pool, message.chat.id, message.text)
+    bot.send_message(
+        message.chat.id,
+        texts.howto_training_text,
+        reply_markup=keyboards.empty,
+        parse_mode="MarkdownV2",
+    )
+
+
+@logged_execution
+def handle_howto_groups(message, bot, pool):
+    db_model.log_command(pool, message.chat.id, message.text)
+    bot.send_message(
+        message.chat.id,
+        texts.howto_groups,
+        reply_markup=keyboards.empty,
+        parse_mode="MarkdownV2",
+    )
 
 
 @logged_execution
