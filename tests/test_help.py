@@ -23,3 +23,15 @@ def test_start(test_client, chat_id):
 def test_help(test_client, chat_id):
     with utils.CommandContext(test_client, chat_id, "/help") as command:
         command.expect_next_prefix("Ahoy, sexy!")
+
+def test_howto(test_client, chat_id):
+    with utils.CommandContext(test_client, chat_id, "/howto") as command:
+        command.expect_next_prefix("How to start learning?")
+
+def test_howto_training(test_client, chat_id):
+    with utils.CommandContext(test_client, chat_id, "/howto_training") as command:
+        command.expect_next_prefix("How to train")
+
+def test_howto_groups(test_client, chat_id):
+    with utils.CommandContext(test_client, chat_id, "/howto_groups") as command:
+        command.expect_next_prefix("How to create and manage groups")
