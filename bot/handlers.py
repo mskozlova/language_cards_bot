@@ -1153,7 +1153,7 @@ def handle_train(message, bot, pool):
     
     if len(db_model.get_full_vocab(pool, message.chat.id, language)) == 0:
         bot.send_message(
-            message.chat.id, texts.training_no_words, reply_markup=markup
+            message.chat.id, texts.training_no_words, reply_markup=keyboards.empty
         )
         return
 
