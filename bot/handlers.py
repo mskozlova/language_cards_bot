@@ -1150,6 +1150,12 @@ def handle_train(message, bot, pool):
     if language is None:
         utils.handle_language_not_set(message, bot)
         return
+    
+    if len(db_model.get_full_vocab(pool, message.chat.id, language)) == 0:
+        bot.send_message(
+            message.chat.id, texts.training_no_words, reply_markup=keyboards.empty
+        )
+        return
 
     markup = keyboards.get_reply_keyboard(options.train_strategy_options, ["/cancel"])
     reply_message = bot.send_message(

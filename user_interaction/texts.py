@@ -285,6 +285,8 @@ training_init = (
     "- group - words from a particular group"
 )
 
+training_no_words = "You current vocabulary is empty. /add_words first!"
+
 training_direction = "Choose training direction: {} ➡️ {}, or {} ⬅️ {}."
 
 training_duration = "Choose duration of your training. You can also type in any number."
